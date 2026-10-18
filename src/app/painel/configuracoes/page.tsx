@@ -1,0 +1,285 @@
+"use client";
+
+import { Bell, Building, Check, Minus, Palette, Settings2, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { DemoUser, Role } from "@/types";
+import { siteConfig } from "@/config/site";
+import { appNavigation } from "@/config/navigation";
+import { demoUsers, roleDescriptions, roleLabels } from "@/data/users";
+import { cn, formatDateTime, uid } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Tabs } from "@/components/ui/tabs";
+import { DataTable } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
+import { Modal } from "@/components/ui/modal";
+import { DemoBadge } from "@/components/ui/demo-badge";
+
+type Tab = "instituicao" | "utilizadores" | "perfis" | "preferencias" | "notificacoes" | "personalizacao";
+const ROLES: Role[] = ["admin_geral", "administrador", "financeiro", "porteiro", "morador"];
+
+export default function ConfiguracoesPage() {
+  const [tab, setTab] = useState<Tab>("instituicao");
+  return (
+    <>
+      <PageHeader eyebrow="Administração" title="Configurações" description="Dados institucionais, utilizadores, perfis e preferências da plataforma." actions={<DemoBadge label="Alterações não persistidas" />} />
+      <Tabs<Tab>
+        className="mb-6"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "instituicao", label: "Dados institucionais" },
+          { id: "utilizadores", label: "Utilizadores" },
+          { id: "perfis", label: "Perfis e permissões" },
+          { id: "preferencias", label: "Preferências" },
+          { id: "notificacoes", label: "Notificações" },
+          { id: "personalizacao", label: "Personalização" },
+        ]}
+      />
+      {tab === "instituicao" && <Institution />}
+      {tab === "utilizadores" && <UsersTab />}
+      {tab === "perfis" && <Profiles />}
+      {tab === "preferencias" && <Preferences />}
+      {tab === "notificacoes" && <NotificationsTab />}
+      {tab === "personalizacao" && <Personalization />}
+    </>
+  );
+}
+
+function saved() {
+  toast.success("Configurações guardadas (demonstração).", { description: "Serão persistidas na fase de backend." });
+}
+
+function Institution() {
+  return (
+    <Card>
+      <CardHeader title="Dados institucionais" description="Campos vazios aguardam confirmação oficial pela administração." action={<Building className="h-4 w-4 text-graphite-400" />} />
+      <CardBody className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nome oficial">
+          <Input defaultValue={siteConfig.name} />
+        </Field>
+        <Field label="Domínio">
+          <Input defaultValue={siteConfig.url} />
+        </Field>
+        <Field label="Localização">
+          <Input defaultValue={siteConfig.location.full} />
+        </Field>
+        <Field label="NIF do condomínio" hint="Por confirmar">
+          <Input placeholder="—" />
+        </Field>
+        <Field label="Telefone oficial" hint="Por confirmar">
+          <Input placeholder="+244 …" defaultValue={siteConfig.contacts.phone ?? ""} />
+        </Field>
+        <Field label="Email oficial" hint="Por confirmar">
+          <Input placeholder="geral@residenciallaguna.ao" defaultValue={siteConfig.contacts.email ?? ""} />
+        </Field>
+        <Field label="IBAN para pagamento de quotas" hint="Será apresentado ao morador no momento do pagamento" className="sm:col-span-2">
+          <Input placeholder="AO06 …" />
+        </Field>
+        <Field label="Texto institucional" className="sm:col-span-2">
+          <Textarea rows={4} defaultValue={siteConfig.description} />
+        </Field>
+        <div className="flex justify-end sm:col-span-2">
+          <Button onClick={saved}>Guardar alterações</Button>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function UsersTab() {
+  const [users, setUsers] = useState<Omit<DemoUser, "password">[]>(demoUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, status: u.status, lastAccess: u.lastAccess })));
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<Role>("morador");
+
+  return (
+    <Card>
+      <CardHeader title="Gestão de utilizadores" description="Contas de acesso à área privada" action={<Button size="sm" onClick={() => setOpen(true)}><UserPlus className="h-3.5 w-3.5" /> Convidar utilizador</Button>} />
+      <DataTable
+        rows={users}
+        rowKey={(u) => u.id}
+        columns={[
+          { key: "name", header: "Utilizador", primary: true, cell: (u) => <span className="flex items-center gap-3"><Avatar name={u.name} size="sm" /><span><span className="block font-medium text-navy-900">{u.name}</span><span className="block text-xs text-graphite-500">{u.email}</span></span></span> },
+          { key: "role", header: "Perfil", cell: (u) => <Badge tone="navy">{roleLabels[u.role]}</Badge> },
+          { key: "last", header: "Último acesso", cell: (u) => (u.lastAccess ? formatDateTime(u.lastAccess) : "Convite pendente"), hideOnMobile: true },
+          { key: "status", header: "Estado", cell: (u) => <StatusBadge status={u.status} /> },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            cell: (u) => (
+              <Button size="sm" variant="ghost" onClick={() => setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, status: x.status === "activo" ? "inactivo" : "activo" } : x)))}>
+                {u.status === "activo" ? "Desactivar" : "Activar"}
+              </Button>
+            ),
+          },
+        ]}
+      />
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Convidar utilizador"
+        description="Na versão final será enviado um email de activação."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (name.trim().length < 3 || !email.includes("@")) return toast.error("Preencha nome e email válidos.");
+                setUsers((l) => [...l, { id: uid("usr"), name, email, role, title: roleLabels[role], status: "activo" }]);
+                toast.success(`Convite simulado para ${email}`);
+                setOpen(false);
+                setName("");
+                setEmail("");
+              }}
+            >
+              Convidar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Nome"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          <Field label="Perfil">
+            <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>{ROLES.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}</Select>
+          </Field>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+
+function Profiles() {
+  const items = appNavigation.flatMap((g) => g.items);
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {ROLES.map((r) => (
+          <div key={r} className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft">
+            <ShieldCheck className="h-5 w-5 text-gold-600" />
+            <p className="mt-3 font-semibold text-navy-900">{roleLabels[r]}</p>
+            <p className="mt-1 text-xs text-graphite-500">{roleDescriptions[r]}</p>
+            <p className="mt-3 text-xs font-medium text-navy-700">{items.filter((i) => i.roles.includes(r)).length} módulos</p>
+          </div>
+        ))}
+      </div>
+      <Card>
+        <CardHeader title="Matriz de permissões" description="Acesso aos módulos por perfil (definido em src/config/navigation.ts)" />
+        <div className="scrollbar-thin overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="border-b border-graphite-100 bg-graphite-50/70 text-[11px] tracking-wider text-graphite-500 uppercase">
+                <th className="px-4 py-3 text-left">Módulo</th>
+                {ROLES.map((r) => <th key={r} className="px-3 py-3 text-center">{roleLabels[r]}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-graphite-100">
+              {items.map((i) => (
+                <tr key={i.href}>
+                  <td className="px-4 py-2.5"><span className="flex items-center gap-2 font-medium text-navy-900"><i.icon className="h-4 w-4 text-graphite-400" />{i.label}</span></td>
+                  {ROLES.map((r) => (
+                    <td key={r} className="px-3 py-2.5 text-center">
+                      {i.roles.includes(r) ? <Check className="mx-auto h-4 w-4 text-emerald-600" aria-label="Com acesso" /> : <Minus className="mx-auto h-4 w-4 text-graphite-300" aria-label="Sem acesso" />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Toggle({ label, description, defaultOn }: { label: string; description?: string; defaultOn?: boolean }) {
+  const [on, setOn] = useState(!!defaultOn);
+  return (
+    <div className="flex items-center justify-between gap-6 py-3.5">
+      <div>
+        <p className="text-sm font-medium text-navy-900">{label}</p>
+        {description && <p className="text-xs text-graphite-500">{description}</p>}
+      </div>
+      <button role="switch" aria-checked={on} aria-label={label} onClick={() => setOn(!on)} className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-navy-900" : "bg-graphite-200")}>
+        <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", on && "translate-x-5")} />
+      </button>
+    </div>
+  );
+}
+
+function Preferences() {
+  return (
+    <Card>
+      <CardHeader title="Preferências gerais" action={<Settings2 className="h-4 w-4 text-graphite-400" />} />
+      <CardBody className="grid gap-4 sm:grid-cols-2">
+        <Field label="Idioma"><Select defaultValue="pt-AO"><option value="pt-AO">Português (Angola)</option><option value="pt-PT">Português (Portugal)</option></Select></Field>
+        <Field label="Moeda"><Select defaultValue="AOA"><option value="AOA">Kwanza (AOA / Kz)</option></Select></Field>
+        <Field label="Dia de vencimento das quotas"><Input type="number" defaultValue={25} min={1} max={28} /></Field>
+        <Field label="Fuso horário"><Select defaultValue="Africa/Luanda"><option>Africa/Luanda</option></Select></Field>
+        <div className="divide-y divide-graphite-100 sm:col-span-2">
+          <Toggle label="Permitir pagamentos parciais" description="Aceitar comprovativos com valor inferior à quota" />
+          <Toggle label="Aprovação dupla de pagamentos" description="Exigir validação do Financeiro e do Administrador" />
+          <Toggle label="Mostrar indicadores no portal público" defaultOn description="Apenas valores confirmados" />
+        </div>
+        <div className="flex justify-end sm:col-span-2"><Button onClick={saved}>Guardar</Button></div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function NotificationsTab() {
+  return (
+    <Card>
+      <CardHeader title="Notificações" description="Canais e eventos (simulação)" action={<Bell className="h-4 w-4 text-graphite-400" />} />
+      <CardBody className="divide-y divide-graphite-100">
+        <Toggle label="Novo comprovativo submetido" description="Notificar Financeiro e Administração" defaultOn />
+        <Toggle label="Pagamento aprovado / rejeitado" description="Notificar o morador" defaultOn />
+        <Toggle label="Lembrete de quota a vencer" description="5 dias antes do vencimento" defaultOn />
+        <Toggle label="Nova circular publicada" description="Notificar todos os moradores" defaultOn />
+        <Toggle label="Ocorrência de prioridade alta" description="Notificar Administração e Portaria" defaultOn />
+        <Toggle label="Envio por email" description="Disponível após configuração do servidor de email" />
+        <Toggle label="Envio por SMS / WhatsApp" description="Integração futura" />
+        <div className="flex justify-end pt-4"><Button onClick={saved}>Guardar</Button></div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function Personalization() {
+  const [accent, setAccent] = useState("gold");
+  return (
+    <Card>
+      <CardHeader title="Personalização" action={<Palette className="h-4 w-4 text-graphite-400" />} />
+      <CardBody>
+        <p className="mb-3 text-sm font-medium text-navy-900">Cor de destaque</p>
+        <div className="flex flex-wrap gap-3">
+          {[
+            { id: "gold", label: "Dourado premium", c: "bg-gold-500" },
+            { id: "navy", label: "Azul-marinho", c: "bg-navy-700" },
+            { id: "graphite", label: "Grafite", c: "bg-graphite-700" },
+          ].map((a) => (
+            <button key={a.id} onClick={() => setAccent(a.id)} className={cn("flex items-center gap-3 rounded-2xl border p-3 pr-5 transition", accent === a.id ? "border-navy-900 ring-2 ring-navy-100" : "border-graphite-200 hover:border-navy-300")}>
+              <span className={cn("h-8 w-8 rounded-xl", a.c)} />
+              <span className="text-sm text-navy-900">{a.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 divide-y divide-graphite-100">
+          <Toggle label="Animações da interface" defaultOn description="Desactivar para dispositivos mais lentos" />
+          <Toggle label="Modo compacto nas tabelas" />
+          <Toggle label="Sidebar recolhida por defeito" />
+        </div>
+        <div className="mt-4 flex justify-end"><Button onClick={saved}>Guardar</Button></div>
+        <p className="mt-2 text-right text-xs text-graphite-400"><Users className="mr-1 inline h-3 w-3" />Preferências aplicáveis por utilizador na fase de backend.</p>
+      </CardBody>
+    </Card>
+  );
+}
