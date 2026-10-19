@@ -8,6 +8,7 @@ export const CHART_COLORS = ["#2e5a9c", "#b8873a", "#0e9c8e", "#9a5bc0"];
 
 /** Cores de estado (reservadas) — acompanhadas sempre por texto. */
 export const STATUS_COLORS: Record<string, string> = {
+  pago: "#15803d",
   aprovado: "#15803d",
   em_analise: "#0284c7",
   pendente: "#94a3b8",

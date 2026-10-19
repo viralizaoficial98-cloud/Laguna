@@ -35,12 +35,20 @@ export function Footer() {
           <ul className="space-y-3.5 text-sm">
             <li className="flex gap-3">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-              <span>{siteConfig.location.full}</span>
+              <span>
+                {siteConfig.location.address}, Luanda, Angola
+              </span>
             </li>
             <li className="flex gap-3">
               <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
               <span className={c.phone ? "" : "text-navy-300/60 italic"}>{c.phone ?? "Telefone por confirmar"}</span>
             </li>
+            {c.adminPhone && (
+              <li className="flex gap-3">
+                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
+                <span>Administração: {c.adminPhone}</span>
+              </li>
+            )}
             <li className="flex gap-3">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
               <span className={c.email ? "" : "text-navy-300/60 italic"}>{c.email ?? "Email por confirmar"}</span>

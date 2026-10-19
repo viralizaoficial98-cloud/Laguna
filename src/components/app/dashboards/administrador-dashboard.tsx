@@ -15,12 +15,12 @@ import { OccurrencesWidget } from "@/components/app/widgets/occurrences-widget";
 import { Welcome } from "./welcome";
 
 const shortcuts = [
-  { href: "/painel/apartamentos", label: "Apartamentos", icon: Building2 },
+  { href: "/painel/apartamentos", label: "Blocos e apartamentos", icon: Building2 },
   { href: "/painel/moradores", label: "Moradores", icon: Users },
-  { href: "/painel/circulares/editor", label: "Nova circular", icon: ScrollText },
-  { href: "/painel/comunicados", label: "Comunicados", icon: Megaphone },
-  { href: "/painel/documentos", label: "Documentos", icon: FileStack },
-  { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/painel/quotas", label: "Quotas trimestrais", icon: FileStack },
+  { href: "/painel/circulares/editor", label: "Emitir circular", icon: ScrollText },
+  { href: "/painel/comunicados", label: "Comunicados (PDF)", icon: Megaphone },
+  { href: "/painel/portaria", label: "Visitas", icon: BarChart3 },
 ];
 
 export function AdministradorDashboard({ session }: { session: Session }) {
@@ -33,14 +33,14 @@ export function AdministradorDashboard({ session }: { session: Session }) {
 
   return (
     <>
-      <Welcome name={session.name} subtitle="Gestão operacional do condomínio." image="/images/laguna/fachadas/entrada-principal.webp" />
+      <Welcome name={session.name} subtitle="Administrador do Condomínio · Residencial Laguna" image="/images/laguna/fachadas/entrada-principal.webp" />
       <div className="mb-3 flex justify-end">
         <DemoDataNote />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard index={0} label="Apartamentos" value={apartments.length} icon={Building2} hint={`${apartments.filter((a) => a.status === "ocupado").length} ocupados`} />
+        <StatCard index={0} label="Fracções activas" value={apartments.filter((a) => a.active).length} icon={Building2} hint={`${apartments.filter((a) => a.active && a.status === "ocupado").length} ocupadas · 10 blocos`} />
         <StatCard index={1} label="Moradores activos" value={residents.filter((r) => r.status === "activo").length} icon={Users} tone="info" />
-        <StatCard index={2} label="Pagamentos pendentes" value={f.analysisCount} icon={Hourglass} tone="gold" hint="a aguardar aprovação" />
+        <StatCard index={2} label="Comprovativos por validar" value={f.analysisCount} icon={Hourglass} tone="gold" hint="quotas trimestrais" />
         <StatCard index={3} label="Ocorrências abertas" value={occurrences.filter((o) => o.status !== "resolvida").length} icon={ShieldAlert} tone="warning" />
       </div>
 

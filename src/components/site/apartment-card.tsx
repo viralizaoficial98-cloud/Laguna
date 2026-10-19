@@ -12,7 +12,7 @@ export function ApartmentCard({ typology }: { typology: Typology }) {
         <span className="absolute top-5 left-5 rounded-full bg-white/95 px-4 py-1.5 font-display text-2xl font-semibold text-navy-900 shadow-soft">{typology.label}</span>
         {!typology.confirmed && (
           <span className="absolute top-6 right-5 inline-flex items-center gap-1 rounded-full bg-navy-950/60 px-2.5 py-1 text-[10px] font-medium text-white backdrop-blur">
-            <Info className="h-3 w-3" /> Tipologia de exemplo
+            <Info className="h-3 w-3" /> Por confirmar
           </span>
         )}
       </div>

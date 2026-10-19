@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^5.9.2",
     "clsx": "^2.1.1",
     "framer-motion": "^12.43.0",
+    "jspdf": "^3.0.4",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
     "react": "19.3.0",

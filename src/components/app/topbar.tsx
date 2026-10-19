@@ -66,9 +66,9 @@ function GlobalSearch({ session }: { session: Session }) {
       .map((i) => ({ key: i.href, label: i.label, sub: "Página", href: i.href, icon: i.icon }));
     const apts = staff
       ? apartments
-          .filter((a) => includesText([`${a.block}-${a.number}`, `${a.block}${a.number}`, a.ownerName], q))
+          .filter((a) => includesText([`Bloco ${a.block} ${a.number}`, `${a.block}-${a.number}`, `${a.block}${a.number}`, a.ownerName], q))
           .slice(0, 4)
-          .map((a) => ({ key: a.id, label: `Apartamento ${a.block}-${a.number}`, sub: a.ownerName, href: `/painel/apartamentos?q=${a.block}-${a.number}`, icon: Building2 }))
+          .map((a) => ({ key: a.id, label: `Bloco ${a.block} · Apartamento ${a.number}`, sub: a.ownerName || "Sem proprietário registado", href: `/painel/apartamentos?q=${a.block}-${a.number}`, icon: Building2 }))
       : [];
     const res = staff
       ? residents
@@ -89,7 +89,7 @@ function GlobalSearch({ session }: { session: Session }) {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder={staff ? "Pesquisar páginas, apartamentos, moradores…" : "Pesquisar no painel…"}
+        placeholder={staff ? "Pesquisar páginas, fracções (ex.: 06-201), moradores…" : "Pesquisar no painel…"}
         className="h-10 w-full rounded-xl border border-transparent bg-graphite-100/80 pr-3 pl-9 text-sm placeholder:text-graphite-400 focus:border-navy-200 focus:bg-white focus:ring-4 focus:ring-navy-50 focus:outline-none"
         aria-label="Pesquisa global"
       />

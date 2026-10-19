@@ -16,8 +16,8 @@ export default async function ApartamentosPage() {
           <div className="mb-8 flex items-start gap-3 rounded-2xl border border-navy-100 bg-navy-50/70 px-5 py-4 text-sm text-navy-900">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-navy-600" />
             <p>
-              As tipologias T2 e T3 são apresentadas como exemplos iniciais. Áreas, número de casas de banho, preços e disponibilidade serão
-              publicados após confirmação pela administração.
+              O Residencial Laguna dispõe de apartamentos T2, T3 e T4. Áreas, número de casas de banho, preços e disponibilidade serão
+              publicados após confirmação pela Administração.
             </p>
           </div>
           <ApartmentsExplorer typologies={typologies} />

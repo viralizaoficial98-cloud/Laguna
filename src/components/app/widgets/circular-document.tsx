@@ -1,45 +1,74 @@
 import Image from "next/image";
 import type { Circular } from "@/types";
 import { siteConfig } from "@/config/site";
-import { formatDate } from "@/lib/utils";
+import { formatLongDatePT } from "@/lib/utils";
+import { recipientLines } from "@/lib/circular";
 
-/** Modelo visual da circular institucional (A4), pronto para impressão. */
-export function CircularDocument({ circular }: { circular: Pick<Circular, "number" | "date" | "subject" | "body" | "author" | "authorTitle" | "audience" | "status"> }) {
+export type CircularDocData = Pick<Circular, "number" | "date" | "subject" | "body" | "closing" | "author" | "recipients" | "status">;
+
+function paragraphs(text?: string) {
+  return (text ?? "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Pré-visualização A4 da circular, fiel ao modelo oficial "CIRCULAR N.º 04/ADMLR/2025".
+ * O PDF descarregável é gerado por src/lib/circular-pdf.ts com a mesma estrutura.
+ */
+export function CircularDocument({ circular }: { circular: CircularDocData }) {
+  const list = circular.recipients.mode === "seleccao" && circular.recipients.listInBody ? recipientLines(circular.recipients) : [];
   return (
-    <article className="print-area relative mx-auto w-full max-w-[794px] overflow-hidden bg-white px-8 py-10 text-graphite-800 shadow-lift sm:px-14 sm:py-14" style={{ minHeight: 900 }}>
+    <article
+      className="print-area relative mx-auto flex w-full max-w-[794px] flex-col bg-white px-[9%] pt-[5%] pb-[4%] text-[#191919] shadow-lift"
+      style={{ aspectRatio: "210 / 297", fontFamily: "Helvetica, Arial, sans-serif" }}
+    >
       {circular.status === "rascunho" && (
-        <span className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[30deg] font-display text-[7rem] font-semibold text-graphite-100 select-none">RASCUNHO</span>
+        <span className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[30deg] text-[5rem] font-semibold text-graphite-100 select-none">RASCUNHO</span>
       )}
-      <header className="relative flex items-start justify-between gap-6 border-b-2 border-navy-900 pb-6">
-        <div>
-          <Image src={siteConfig.logo.color} alt="Residencial Laguna" width={siteConfig.logo.width} height={siteConfig.logo.height} className="h-12 w-auto" />
-          <p className="mt-2 text-[10px] tracking-[0.25em] text-graphite-500 uppercase">Administração do Condomínio · {siteConfig.location.district}, {siteConfig.location.city}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[10px] tracking-[0.2em] text-gold-700 uppercase">Circular</p>
-          <p className="font-display text-3xl whitespace-nowrap text-navy-900">N.º {circular.number || "—"}</p>
-          <p className="text-xs text-graphite-500">{circular.date ? formatDate(circular.date, { day: "2-digit", month: "long", year: "numeric" }) : "—"}</p>
-        </div>
+      <header className="relative">
+        <Image src={siteConfig.logo.color} alt="Residencial Laguna" width={siteConfig.logo.width} height={siteConfig.logo.height} className="h-auto w-[30%] min-w-[120px]" />
+        <p className="mt-1 text-[15px]">Administração</p>
+        <div className="mt-1 h-px bg-[#282828]" />
       </header>
 
-      <div className="relative mt-8 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <span className="font-semibold text-navy-900">Para:</span>
-        <span>{circular.audience || "—"}</span>
-        <span className="font-semibold text-navy-900">Assunto:</span>
-        <span className="font-semibold">{circular.subject || "—"}</span>
+      <div className="relative mt-[6%] text-center">
+        <p className="text-[16px] font-bold">CIRCULAR N.º {circular.number || "—"}</p>
+        <p className="mx-auto mt-2 max-w-[90%] text-[15px]">{circular.subject || "Assunto da circular"}</p>
       </div>
 
-      <div className="relative mt-8 text-[15px] leading-7 whitespace-pre-line">{circular.body || "O corpo da circular aparecerá aqui."}</div>
+      <div className="relative mt-[5%] flex-1 space-y-3 text-justify text-[14px] leading-[1.55]">
+        {paragraphs(circular.body).map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+        {paragraphs(circular.body).length === 0 && <p className="text-graphite-400 italic">O texto da comunicação aparecerá aqui.</p>}
+        {list.length > 0 && (
+          <ul className="space-y-1 py-1 text-left text-[15px]">
+            {list.map((l) => (
+              <li key={l} className="flex gap-3">
+                <span>•</span>
+                {l}
+              </li>
+            ))}
+          </ul>
+        )}
+        {paragraphs(circular.closing).map((p, i) => (
+          <p key={`c${i}`}>{p}</p>
+        ))}
 
-      <footer className="relative mt-16">
-        <p className="text-sm">Talatona, {circular.date ? formatDate(circular.date, { day: "numeric", month: "long", year: "numeric" }) : "—"}</p>
-        <div className="mt-14 w-64 border-t border-graphite-400 pt-2">
-          <p className="text-sm font-semibold text-navy-900">{circular.author}</p>
-          <p className="text-xs text-graphite-500">{circular.authorTitle}</p>
+        <p className="pt-4 text-left">Luanda, aos {circular.date ? formatLongDatePT(circular.date) : "—"}.</p>
+
+        <div className="ml-auto mr-[12%] w-[44%] pt-3 text-center">
+          <p>{siteConfig.administrator.signatureTitle}</p>
+          <div className="mt-1 flex h-20 items-center justify-center rounded-md border border-dashed border-graphite-300 text-[10px] text-graphite-400">Espaço reservado para assinatura e carimbo</div>
+          <p className="mt-2 font-bold text-navy-900">{circular.author || siteConfig.administrator.name}</p>
         </div>
-        <p className="mt-2 text-[10px] text-graphite-400">Área de assinatura — sem validade de assinatura digital nesta fase.</p>
+      </div>
+
+      <footer className="relative mt-4 text-[9.5px] text-[#205caa]">
+        {siteConfig.letterheadName}, {siteConfig.location.street}, TALATONA – LUANDA – ANGOLA{siteConfig.contacts.phone ? ` | M. ${siteConfig.contacts.phone}` : ""}
       </footer>
-      <div className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-navy-900 via-gold-500 to-navy-900" />
     </article>
   );
 }

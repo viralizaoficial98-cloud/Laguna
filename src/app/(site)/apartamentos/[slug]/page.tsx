@@ -24,7 +24,7 @@ export default async function ApartamentoPage({ params }: PageProps<"/apartament
 
   const specs = [
     { icon: BedDouble, label: "Quartos", value: String(t.bedrooms) },
-    { icon: Bath, label: "Casas de banho", value: null },
+    { icon: Bath, label: "Casas de banho", value: t.bathrooms ? String(t.bathrooms) : null },
     { icon: Ruler, label: "Área", value: t.areaM2 ? `${t.areaM2} m²` : null },
   ];
 

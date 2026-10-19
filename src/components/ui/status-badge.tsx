@@ -5,7 +5,8 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   // quotas / pagamentos
   pendente: { label: "Pendente", tone: "neutral" },
   em_analise: { label: "Em análise", tone: "info" },
-  aprovado: { label: "Aprovado", tone: "success" },
+  pago: { label: "Pago", tone: "success" },
+  aprovado: { label: "Validado", tone: "success" },
   rejeitado: { label: "Rejeitado", tone: "danger" },
   em_atraso: { label: "Em atraso", tone: "warning" },
   // apartamentos
@@ -20,10 +21,14 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   publicada: { label: "Publicada", tone: "success" },
   arquivada: { label: "Arquivada", tone: "violet" },
   // visitas
-  aguardando: { label: "A aguardar", tone: "warning" },
+  autorizada: { label: "Autorizada", tone: "success" },
+  cancelada: { label: "Cancelada", tone: "neutral" },
+  aguardando: { label: "A aguardar entrada", tone: "warning" },
   no_interior: { label: "No interior", tone: "info" },
   saiu: { label: "Saiu", tone: "neutral" },
-  recusado: { label: "Recusado", tone: "danger" },
+  // comunicados
+  publicado: { label: "Publicado", tone: "success" },
+  retirado: { label: "Retirado", tone: "violet" },
   // ocorrências
   aberta: { label: "Aberta", tone: "warning" },
   em_curso: { label: "Em curso", tone: "info" },

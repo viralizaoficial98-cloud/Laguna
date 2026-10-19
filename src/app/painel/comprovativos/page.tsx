@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import type { Payment } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
 import { useCurrentResident } from "@/hooks/use-session";
-import { formatBytes, formatDate, formatKz, formatPeriod } from "@/lib/utils";
+import { formatBytes, formatDate, formatKz, formatQuarter } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Modal } from "@/components/ui/modal";
@@ -39,7 +39,7 @@ export default function ComprovativosPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-navy-900">{p.proof?.name}</span>
                   <span className="block text-xs text-graphite-500">
-                    {q ? formatPeriod(q.period, true) : ""} · {formatKz(p.amount)}
+                    {q ? formatQuarter(q.period) : ""} · {formatKz(p.amount)}
                   </span>
                   <span className="mt-2 flex items-center justify-between gap-2">
                     <StatusBadge status={p.status} />

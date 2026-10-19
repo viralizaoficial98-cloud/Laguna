@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { Payment } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
 import { useCurrentResident } from "@/hooks/use-session";
-import { cn, formatDate, formatDateTime, formatKz, formatPeriod } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, formatKz, formatQuarter } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -30,10 +30,11 @@ export default function MeusPagamentosPage() {
           onRowClick={setSel}
           emptyTitle="Ainda não registou pagamentos"
           columns={[
-            { key: "period", header: "Quota", primary: true, cell: (p) => <span className="font-medium text-navy-900">{period(p) ? formatPeriod(period(p)!, true) : "—"}</span> },
+            { key: "period", header: "Quota trimestral", primary: true, cell: (p) => <span className="font-medium text-navy-900">{period(p) ? formatQuarter(period(p)!) : "—"}</span> },
             { key: "ref", header: "Referência", cell: (p) => <span className="font-mono text-xs">{p.reference}</span> },
             { key: "method", header: "Método", cell: (p) => METHOD_LABELS[p.method], hideOnMobile: true },
-            { key: "date", header: "Enviado", cell: (p) => formatDate(p.submittedAt) },
+            { key: "paid", header: "Data do pagamento", cell: (p) => formatDate(p.paidAt) },
+            { key: "date", header: "Enviado", cell: (p) => formatDate(p.submittedAt), hideOnMobile: true },
             { key: "amount", header: "Valor", align: "right", cell: (p) => <span className="font-medium tabular-nums">{formatKz(p.amount)}</span> },
             { key: "status", header: "Estado", cell: (p) => <StatusBadge status={p.status} /> },
           ]}
@@ -44,11 +45,11 @@ export default function MeusPagamentosPage() {
           <div className="grid gap-6 md:grid-cols-2">
             <ol className="relative space-y-6 border-l border-graphite-200 pl-6">
               <TimelineItem done title="Comprovativo enviado" date={formatDateTime(sel.submittedAt)} />
-              <TimelineItem done={sel.status !== "em_analise"} active={sel.status === "em_analise"} title="Em análise pelo Financeiro" date={sel.status === "em_analise" ? "A aguardar" : ""} />
+              <TimelineItem done={sel.status !== "em_analise"} active={sel.status === "em_analise"} title="Em análise pela Administração" date={sel.status === "em_analise" ? "A aguardar" : ""} />
               <TimelineItem
                 done={sel.status === "aprovado"}
                 error={sel.status === "rejeitado"}
-                title={sel.status === "rejeitado" ? "Pagamento rejeitado" : "Pagamento aprovado"}
+                title={sel.status === "rejeitado" ? "Comprovativo rejeitado" : "Pagamento validado"}
                 date={sel.reviewedAt ? `${formatDateTime(sel.reviewedAt)} · ${sel.reviewedBy}` : ""}
                 note={sel.note}
               />

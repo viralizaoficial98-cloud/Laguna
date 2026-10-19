@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PaymentMethod, PaymentProof, Quota } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
-import { cn, formatBytes, formatDate, formatKz, formatPeriod } from "@/lib/utils";
+import { cn, formatBytes, formatDate, formatKz, formatQuarter } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
@@ -73,7 +73,7 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
       onClose={reset}
       size="lg"
       title="Registar pagamento"
-      description={quota ? `${quota.description} · ${formatPeriod(quota.period, true)}` : ""}
+      description={quota ? `${quota.description} · ${formatQuarter(quota.period, "months")}` : ""}
       footer={
         step < 3 ? (
           <>
@@ -106,19 +106,19 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
         <motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
           {quota && step === 0 && (
             <div className="rounded-2xl border border-graphite-100 bg-gradient-to-br from-navy-900 to-navy-800 p-6 text-white">
-              <p className="text-xs tracking-widest text-gold-300 uppercase">Valor a pagar</p>
+              <p className="text-xs tracking-widest text-gold-300 uppercase">Quota trimestral a pagar</p>
               <p className="mt-2 text-4xl font-semibold tabular-nums">{formatKz(quota.amount)}</p>
               <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-navy-200">Período</p>
-                  <p className="font-medium">{formatPeriod(quota.period, true)}</p>
+                  <p className="font-medium">{formatQuarter(quota.period)}</p>
                 </div>
                 <div>
-                  <p className="text-navy-200">Vencimento</p>
+                  <p className="text-navy-200">Data limite</p>
                   <p className="font-medium">{formatDate(quota.dueDate)}</p>
                 </div>
               </div>
-              <p className="mt-5 rounded-xl bg-white/10 p-3 text-xs text-navy-100">Os dados bancários oficiais do condomínio serão apresentados aqui na versão final.</p>
+              <p className="mt-5 rounded-xl bg-white/10 p-3 text-xs text-navy-100">Os dados bancários oficiais do condomínio serão apresentados aqui após configuração pela Administração.</p>
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarCheck2, MapPin, ShieldCheck, Sparkles, Trees, Users } from "lucide-react";
+import { ArrowRight, CalendarCheck2, MapPin, Phone, ShieldCheck, Sparkles, Trees, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { HeroSlider } from "@/components/site/hero-slider";
@@ -18,7 +18,7 @@ const pillars = [
   { icon: Trees, title: "Ambiente residencial", text: "Palmeiras, espaços verdes e zonas de estar ao ar livre." },
   { icon: Sparkles, title: "Conforto", text: "Piscinas, solário e áreas comuns cuidadas para o dia-a-dia." },
   { icon: ShieldCheck, title: "Segurança", text: "Entrada principal com portão e acesso identificado." },
-  { icon: CalendarCheck2, title: "Organização", text: "Gestão digital de quotas, circulares e comunicados." },
+  { icon: CalendarCheck2, title: "Organização", text: "Gestão digital de quotas trimestrais, circulares, comunicados e visitas." },
   { icon: Users, title: "Qualidade de vida", text: "Um espaço pensado para famílias e convívio entre vizinhos." },
 ];
 
@@ -135,14 +135,14 @@ export default async function HomePage() {
                 Tipologias para <em className="text-gold-600">cada família</em>
               </>
             }
-            description="T2 e T3 apresentados como exemplos iniciais. As tipologias, áreas e características definitivas estão sujeitas a confirmação."
+            description="Apartamentos T2, T3 e T4. Áreas e características detalhadas serão publicadas após confirmação pela Administração."
             action={
               <Link href="/apartamentos" className={buttonClass("outline", "lg", "group")}>
                 Ver apartamentos <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
             }
           />
-          <div className="grid gap-8 md:grid-cols-2">
+          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
             {typologies.map((t, i) => (
               <Reveal key={t.slug} delay={i * 0.1}>
                 <ApartmentCard typology={t} />
@@ -206,10 +206,20 @@ export default async function HomePage() {
             />
             <ul className="space-y-4 text-sm text-navy-100">
               <li className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-gold-400" /> {siteConfig.location.full}
+                <MapPin className="h-5 w-5 text-gold-400" /> {siteConfig.location.address}, Luanda
               </li>
+              {siteConfig.contacts.phone && (
+                <li className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 text-gold-400" /> {siteConfig.contacts.phone}
+                </li>
+              )}
+              {siteConfig.contacts.adminPhone && (
+                <li className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 text-gold-400" /> Administração: {siteConfig.contacts.adminPhone}
+                </li>
+              )}
             </ul>
-            <p className="mt-6 text-xs leading-relaxed text-navy-300/70">Telefone e email oficiais serão publicados após confirmação pela administração.</p>
+            <p className="mt-6 text-xs leading-relaxed text-navy-300/70">Administrador do condomínio: {siteConfig.administrator.name}. Email oficial por confirmar.</p>
           </div>
           <Reveal className="rounded-[2rem] bg-white p-6 shadow-lift sm:p-10 lg:col-span-3">
             <ContactForm />

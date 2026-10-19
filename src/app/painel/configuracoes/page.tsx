@@ -66,14 +66,26 @@ function Institution() {
         <Field label="Domínio">
           <Input defaultValue={siteConfig.url} />
         </Field>
-        <Field label="Localização">
-          <Input defaultValue={siteConfig.location.full} />
+        <Field label="Administrador do condomínio">
+          <Input defaultValue={siteConfig.administrator.name} />
+        </Field>
+        <Field label="Cargo / assinatura">
+          <Input defaultValue={siteConfig.administrator.signatureTitle} />
+        </Field>
+        <Field label="Morada">
+          <Input defaultValue={`${siteConfig.location.address}, Luanda, Angola`} />
+        </Field>
+        <Field label="Referência das circulares" hint="Ex.: 04/ADMLR/2026">
+          <Input defaultValue={siteConfig.circularRef} />
         </Field>
         <Field label="NIF do condomínio" hint="Por confirmar">
           <Input placeholder="—" />
         </Field>
-        <Field label="Telefone oficial" hint="Por confirmar">
+        <Field label="Telefone (rodapé oficial)">
           <Input placeholder="+244 …" defaultValue={siteConfig.contacts.phone ?? ""} />
+        </Field>
+        <Field label="Telefone da Administração">
+          <Input placeholder="+244 …" defaultValue={siteConfig.contacts.adminPhone ?? ""} />
         </Field>
         <Field label="Email oficial" hint="Por confirmar">
           <Input placeholder="geral@residenciallaguna.ao" defaultValue={siteConfig.contacts.email ?? ""} />
@@ -222,7 +234,7 @@ function Preferences() {
       <CardBody className="grid gap-4 sm:grid-cols-2">
         <Field label="Idioma"><Select defaultValue="pt-AO"><option value="pt-AO">Português (Angola)</option><option value="pt-PT">Português (Portugal)</option></Select></Field>
         <Field label="Moeda"><Select defaultValue="AOA"><option value="AOA">Kwanza (AOA / Kz)</option></Select></Field>
-        <Field label="Dia de vencimento das quotas"><Input type="number" defaultValue={25} min={1} max={28} /></Field>
+        <Field label="Periodicidade das quotas"><Select defaultValue="trimestral" disabled><option value="trimestral">Trimestral (Jan–Mar, Abr–Jun, Jul–Set, Out–Dez)</option></Select></Field>
         <Field label="Fuso horário"><Select defaultValue="Africa/Luanda"><option>Africa/Luanda</option></Select></Field>
         <div className="divide-y divide-graphite-100 sm:col-span-2">
           <Toggle label="Permitir pagamentos parciais" description="Aceitar comprovativos com valor inferior à quota" />

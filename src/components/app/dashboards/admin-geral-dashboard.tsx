@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useMemo } from "react";
 import type { Session } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
-import { useFinance } from "@/hooks/use-finance";
-import { formatKz } from "@/lib/utils";
+import { CURRENT_PERIOD, useFinance } from "@/hooks/use-finance";
+import { formatKz, formatQuarter } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DemoDataNote } from "@/components/ui/demo-badge";
@@ -17,7 +17,9 @@ import { OccurrencesWidget } from "@/components/app/widgets/occurrences-widget";
 import { Welcome } from "./welcome";
 
 export function AdminGeralDashboard({ session }: { session: Session }) {
-  const apartments = useDemoStore((s) => s.apartments);
+  const allApartments = useDemoStore((s) => s.apartments);
+  const apartments = useMemo(() => allApartments.filter((a) => a.active), [allApartments]);
+  const quota = useDemoStore((s) => s.settings.quarterlyQuota);
   const residents = useDemoStore((s) => s.residents);
   const f = useFinance();
   const occ = useMemo(
@@ -32,13 +34,13 @@ export function AdminGeralDashboard({ session }: { session: Session }) {
     const b = Array.from(new Set(apartments.map((a) => a.block))).sort();
     return b.map((block) => {
       const list = apartments.filter((a) => a.block === block);
-      return { label: `Bloco ${block}`, ocupados: list.filter((a) => a.status === "ocupado").length, disponiveis: list.filter((a) => a.status !== "ocupado").length };
+      return { label: block, ocupados: list.filter((a) => a.status === "ocupado").length, disponiveis: list.filter((a) => a.status !== "ocupado").length };
     });
   }, [apartments]);
 
   return (
     <>
-      <Welcome name={session.name} subtitle="Visão geral do Residencial Laguna — todos os módulos.">
+      <Welcome name={session.name} subtitle="Visão geral do Residencial Laguna — Administrador: José Leiria.">
         <div className="flex flex-wrap gap-2">
           <Link href="/painel/relatorios" className={buttonClass("gold")}>
             Relatórios
@@ -53,23 +55,23 @@ export function AdminGeralDashboard({ session }: { session: Session }) {
         <DemoDataNote />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard index={0} label="Total de apartamentos" value={apartments.length} icon={Building2} />
+        <StatCard index={0} label="Fracções activas" value={apartments.length} icon={Building2} hint={`10 blocos · ${allApartments.filter((a) => a.provisional).length} provisórias`} />
         <StatCard index={1} label="Total de moradores" value={residents.length} icon={Users} tone="info" hint={`${residents.filter((r) => r.status === "activo").length} activos`} />
         <StatCard index={2} label="Apartamentos ocupados" value={occ.ocupado} icon={DoorOpen} tone="navy" hint={`${Math.round((occ.ocupado / apartments.length) * 100)}% de ocupação`} />
         <StatCard index={3} label="Apartamentos disponíveis" value={occ.disponivel} icon={Building2} tone="success" hint={`${occ.manutencao} em manutenção`} />
-        <StatCard index={4} highlight label="Receita mensal" value={formatKz(f.monthRevenue)} icon={CircleDollarSign} hint="Outubro 2026" />
-        <StatCard index={5} label="Quotas pagas" value={f.paidCount} icon={CheckCircle2} tone="success" hint="até ao mês corrente" />
+        <StatCard index={4} highlight label="Receita do trimestre" value={formatKz(f.quarterRevenue)} icon={CircleDollarSign} hint={formatQuarter(CURRENT_PERIOD)} />
+        <StatCard index={5} label="Quotas pagas" value={f.paidCount} icon={CheckCircle2} tone="success" hint="todos os trimestres" />
         <StatCard index={6} label="Quotas pendentes" value={f.pendingCount} icon={Clock} tone="info" hint={formatKz(f.pending)} />
         <StatCard index={7} label="Valores em atraso" value={formatKz(f.overdue)} icon={AlertTriangle} tone="warning" hint={`${f.overdueCount} quotas`} />
         <StatCard index={8} label="Aguardam aprovação" value={f.analysisCount} icon={Hourglass} tone="gold" hint={formatKz(f.analysis)} />
-        <StatCard index={9} label="A vencer" value={formatKz(f.upcoming)} icon={Wallet} tone="navy" hint="Novembro 2026" />
+        <StatCard index={9} label="Quota trimestral" value={formatKz(quota)} icon={Wallet} tone="navy" hint="valor em vigor por fracção" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <CardHeader title="Receitas mensais" description="Emitido vs. recebido (Kz)" />
+          <CardHeader title="Receitas trimestrais" description="Emitido vs. recebido (Kz)" />
           <CardBody>
-            <GroupedBars data={f.monthly} series={[{ key: "emitido", label: "Emitido" }, { key: "recebido", label: "Recebido" }]} />
+            <GroupedBars data={f.quarterly} series={[{ key: "emitido", label: "Emitido" }, { key: "recebido", label: "Recebido" }]} />
           </CardBody>
         </Card>
         <Card>
@@ -96,7 +98,7 @@ export function AdminGeralDashboard({ session }: { session: Session }) {
           </CardBody>
         </Card>
         <Card className="xl:col-span-2">
-          <CardHeader title="Ocupação por bloco" description="Blocos de demonstração" />
+          <CardHeader title="Ocupação por bloco" description="Blocos 01 a 10 · ocupação fictícia" />
           <CardBody>
             <GroupedBars data={blocks} currency={false} height={220} series={[{ key: "ocupados", label: "Ocupados" }, { key: "disponiveis", label: "Livres / manutenção" }]} />
           </CardBody>

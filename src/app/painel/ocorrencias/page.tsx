@@ -139,7 +139,7 @@ export default function OcorrenciasPage() {
           <Field label="Apartamento (opcional)">
             <Select {...register("apartmentId")}>
               <option value="">—</option>
-              {apartments.map((a) => <option key={a.id} value={a.id}>{a.block}-{a.number}</option>)}
+              {apartments.map((a) => <option key={a.id} value={a.id}>Bloco {a.block} · {a.number}</option>)}
             </Select>
           </Field>
           <Field label="Descrição" required error={errors.description?.message} className="sm:col-span-2">

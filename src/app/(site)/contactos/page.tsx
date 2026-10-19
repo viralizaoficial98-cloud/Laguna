@@ -11,8 +11,9 @@ export const metadata: Metadata = { title: "Contactos", description: "Contacte o
 export default function ContactosPage() {
   const c = siteConfig.contacts;
   const items = [
-    { icon: MapPin, label: "Localização", value: siteConfig.location.full },
+    { icon: MapPin, label: "Morada", value: `${siteConfig.location.address}, Luanda, Angola` },
     { icon: Phone, label: "Telefone", value: c.phone },
+    { icon: Phone, label: "Administração", value: c.adminPhone ? `${c.adminPhone} · ${siteConfig.administrator.name}` : null },
     { icon: Mail, label: "Email", value: c.email },
     { icon: Clock, label: "Atendimento", value: c.officeHours },
   ];

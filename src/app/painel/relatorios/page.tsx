@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
 import { useFinance } from "@/hooks/use-finance";
-import { downloadCsv, formatKz, formatPeriod } from "@/lib/utils";
+import { downloadCsv, formatKz, formatQuarter } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { StatusBadge, statusLabel } from "@/components/ui/status-badge";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { Donut, GroupedBars, HBars } from "@/components/charts/charts";
 
-type Report = "moradores" | "apartamentos" | "ocupacao" | "pagamentos" | "quotas" | "receitas" | "ocorrencias";
+type Report = "moradores" | "apartamentos" | "ocupacao" | "pagamentos" | "quotas" | "receitas" | "ocorrencias" | "visitas";
 
 interface Table {
   head: string[];
@@ -31,6 +31,7 @@ export default function RelatoriosPage() {
   const payments = useDemoStore((s) => s.payments);
   const quotas = useDemoStore((s) => s.quotas);
   const occurrences = useDemoStore((s) => s.occurrences);
+  const visits = useDemoStore((s) => s.visits);
   const f = useFinance();
 
   const tabs: { id: Report; label: string }[] = [
@@ -44,7 +45,12 @@ export default function RelatoriosPage() {
     { id: "receitas", label: "Receitas" },
     { id: "quotas", label: "Quotas" },
     { id: "pagamentos", label: "Pagamentos" },
-    ...(financeOnly ? [] : ([{ id: "ocorrencias", label: "Ocorrências" }] as const)),
+    ...(financeOnly
+      ? []
+      : ([
+          { id: "visitas", label: "Visitas" },
+          { id: "ocorrencias", label: "Ocorrências" },
+        ] as const)),
   ];
 
   const blocks = useMemo(() => Array.from(new Set(apartments.map((a) => a.block))).sort(), [apartments]);
@@ -54,24 +60,24 @@ export default function RelatoriosPage() {
       case "ocupacao": {
         const byBlock = blocks.map((b) => {
           const l = apartments.filter((a) => a.block === b);
-          return { label: `Bloco ${b}`, ocupados: l.filter((a) => a.status === "ocupado").length, livres: l.filter((a) => a.status !== "ocupado").length, total: l.length };
+          return { label: b, ocupados: l.filter((a) => a.status === "ocupado").length, livres: l.filter((a) => a.status !== "ocupado").length, total: l.length };
         });
         return {
           chart: <GroupedBars data={byBlock} currency={false} series={[{ key: "ocupados", label: "Ocupados" }, { key: "livres", label: "Livres / manutenção" }]} />,
           side: <Donut data={[{ key: "o", label: "Ocupados", value: apartments.filter((a) => a.status === "ocupado").length }, { key: "d", label: "Disponíveis", value: apartments.filter((a) => a.status === "disponivel").length }, { key: "m", label: "Manutenção", value: apartments.filter((a) => a.status === "manutencao").length }]} />,
-          table: { head: ["Bloco", "Total", "Ocupados", "Livres / manutenção", "Taxa de ocupação"], rows: byBlock.map((b) => [b.label, b.total, b.ocupados, b.livres, `${Math.round((b.ocupados / b.total) * 100)}%`]) } as Table,
+          table: { head: ["Bloco", "Total", "Ocupados", "Livres / manutenção", "Taxa de ocupação"], rows: byBlock.map((b) => [`Bloco ${b.label}`, b.total, b.ocupados, b.livres, `${Math.round((b.ocupados / b.total) * 100)}%`]) } as Table,
         };
       }
       case "apartamentos": {
-        const byTyp = ["T1", "T2", "T3", "T4"].map((t) => ({ label: t, value: apartments.filter((a) => a.typology === t).length })).filter((x) => x.value);
+        const byTyp = [...(["T2", "T3", "T4"] as const).map((t) => ({ label: t as string, value: apartments.filter((a) => a.typology === t).length })), { label: "Por definir", value: apartments.filter((a) => !a.typology).length }];
         return {
           chart: <HBars data={byTyp} />,
           side: <Donut data={byTyp.map((t) => ({ key: t.label, label: t.label, value: t.value }))} />,
-          table: { head: ["Apartamento", "Tipologia", "Andar", "Proprietário", "Estado"], rows: apartments.map((a) => [`${a.block}-${a.number}`, a.typology, a.floor, a.ownerName, statusLabel(a.status)]) } as Table,
+          table: { head: ["Bloco", "Apartamento", "Tipologia", "Piso", "Cadastro", "Estado"], rows: apartments.map((a) => [`Bloco ${a.block}`, a.number, a.typology ?? "Por definir", a.floor, a.provisional ? "Provisório" : "Validado", a.active ? statusLabel(a.status) : "Desactivado"]) } as Table,
         };
       }
       case "moradores": {
-        const byBlock = blocks.map((b) => ({ label: `Bloco ${b}`, value: residents.filter((r) => r.apartmentId?.startsWith(`apt_${b}`)).length }));
+        const byBlock = blocks.map((b) => ({ label: `Bloco ${b}`, value: residents.filter((r) => r.apartmentId?.startsWith(`apt_${b}_`)).length }));
         return {
           chart: <HBars data={byBlock} />,
           side: <Donut data={[{ key: "p", label: "Proprietários", value: residents.filter((r) => r.type === "proprietario").length }, { key: "i", label: "Inquilinos", value: residents.filter((r) => r.type === "inquilino").length }]} />,
@@ -80,9 +86,9 @@ export default function RelatoriosPage() {
       }
       case "receitas":
         return {
-          chart: <GroupedBars data={f.monthly} series={[{ key: "emitido", label: "Emitido" }, { key: "recebido", label: "Recebido" }]} />,
-          side: <GroupedBars data={f.quarters} height={200} series={[{ key: "emitido", label: "Emitido" }, { key: "recebido", label: "Recebido" }]} />,
-          table: { head: ["Período", "Emitido (Kz)", "Recebido (Kz)", "Em atraso (Kz)", "Cobrança"], rows: f.monthly.map((m) => [formatPeriod(m.period, true), m.emitido, m.recebido, m.emAtraso, `${m.emitido ? Math.round((m.recebido / m.emitido) * 100) : 0}%`]) } as Table,
+          chart: <GroupedBars data={f.quarterly} series={[{ key: "emitido", label: "Emitido" }, { key: "recebido", label: "Recebido" }]} />,
+          side: <Donut useStatusColors data={f.statusCounts.map((s) => ({ key: s.status, value: s.count }))} />,
+          table: { head: ["Trimestre", "Emitido (Kz)", "Recebido (Kz)", "Em atraso (Kz)", "Cobrança"], rows: f.quarterly.map((m) => [formatQuarter(m.period), m.emitido, m.recebido, m.emAtraso, `${m.emitido ? Math.round((m.recebido / m.emitido) * 100) : 0}%`]) } as Table,
         };
       case "quotas":
         return {
@@ -95,10 +101,21 @@ export default function RelatoriosPage() {
         const labels = { transferencia: "Transferência", multicaixa: "Multicaixa", deposito: "Depósito", numerario: "Numerário" };
         return {
           chart: <HBars currency data={methods.map((m) => ({ label: labels[m], value: payments.filter((p) => p.method === m && p.status === "aprovado").reduce((a, p) => a + p.amount, 0) }))} />,
-          side: <Donut useStatusColors data={(["aprovado", "em_analise", "rejeitado"] as const).map((s) => ({ key: s, value: payments.filter((p) => p.status === s).length }))} />,
+          side: <Donut data={(["aprovado", "em_analise", "rejeitado"] as const).map((s) => ({ key: s, value: payments.filter((p) => p.status === s).length }))} />,
           table: {
-            head: ["Apartamento", "Período", "Referência", "Método", "Valor (Kz)", "Estado"],
-            rows: [...payments].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)).map((p) => [aptLabel(apartments, p.apartmentId), formatPeriod(quotas.find((q) => q.id === p.quotaId)?.period ?? "2026-01"), p.reference, labels[p.method], p.amount, statusLabel(p.status)]),
+            head: ["Fracção", "Trimestre", "Referência", "Método", "Valor (Kz)", "Estado"],
+            rows: [...payments].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)).map((p) => [aptLabel(apartments, p.apartmentId), formatQuarter(quotas.find((q) => q.id === p.quotaId)?.period ?? "2026-T1"), p.reference, labels[p.method], p.amount, statusLabel(p.status)]),
+          } as Table,
+        };
+      }
+      case "visitas": {
+        const byBlock = blocks.map((b) => ({ label: `Bloco ${b}`, value: visits.filter((v) => v.apartmentId.startsWith(`apt_${b}_`) && v.status === "autorizada").length }));
+        return {
+          chart: <HBars data={byBlock} />,
+          side: <Donut data={[{ key: "i", label: "Individuais", value: visits.filter((v) => v.kind === "individual").length }, { key: "g", label: "Grupos / eventos", value: visits.filter((v) => v.kind === "grupo").length }, { key: "c", label: "Canceladas", value: visits.filter((v) => v.status === "cancelada").length }]} />,
+          table: {
+            head: ["Fracção", "Tipo", "Visitante / evento", "Pessoas", "Data", "Horário", "Situação"],
+            rows: [...visits].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).map((v) => [aptLabel(apartments, v.apartmentId), v.kind === "grupo" ? "Grupo" : "Individual", v.kind === "grupo" ? v.eventName ?? "" : v.guests[0]?.name ?? "", v.guests.length, v.date.split("-").reverse().join("/"), v.time, v.status === "autorizada" ? "Autorizada" : "Cancelada"]),
           } as Table,
         };
       }
@@ -111,7 +128,7 @@ export default function RelatoriosPage() {
         };
       }
     }
-  }, [report, apartments, residents, payments, quotas, occurrences, f, blocks]);
+  }, [report, apartments, residents, payments, quotas, occurrences, visits, f, blocks]);
 
   const title = tabs.find((t) => t.id === report)?.label ?? "";
   const isMoney = (h: string) => h.includes("(Kz)");
@@ -179,7 +196,7 @@ export default function RelatoriosPage() {
 }
 
 const REVERSE: Record<string, string> = {
-  Pendente: "pendente", "Em análise": "em_analise", Aprovado: "aprovado", Rejeitado: "rejeitado", "Em atraso": "em_atraso",
+  Pendente: "pendente", "Em análise": "em_analise", Pago: "pago", Validado: "aprovado", Rejeitado: "rejeitado", "Em atraso": "em_atraso", Desactivado: "inactivo",
   Ocupado: "ocupado", Disponível: "disponivel", Manutenção: "manutencao", Activo: "activo", Inactivo: "inactivo",
   Aberta: "aberta", "Em curso": "em_curso", Resolvida: "resolvida",
 };

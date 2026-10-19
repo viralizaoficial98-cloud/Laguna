@@ -38,17 +38,53 @@ export function formatTime(value: string | Date) {
   return d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
 }
 
-const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MONTHS_LONG = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-/** "2026-10" → "Out 2026" */
-export function formatPeriod(period: string, long = false) {
-  const [y, m] = period.split("-").map(Number);
-  return `${(long ? MONTHS_LONG : MONTHS)[m - 1]} ${y}`;
+const QUARTER_MONTHS = ["Janeiro a Março", "Abril a Junho", "Julho a Setembro", "Outubro a Dezembro"];
+
+/** "2026-T4" → { year: 2026, quarter: 4 } */
+export function parseQuarter(period: string) {
+  const [y, q] = period.split("-T");
+  return { year: Number(y), quarter: Number(q) as 1 | 2 | 3 | 4 };
 }
 
-export function shortMonth(period: string) {
-  return MONTHS[Number(period.split("-")[1]) - 1];
+export function quarterKey(year: number, quarter: number) {
+  return `${year}-T${quarter}`;
+}
+
+/** "2026-T4" → "4.º Trimestre 2026" (long) ou "T4 2026" (curto) */
+export function formatQuarter(period: string, style: "long" | "short" | "months" = "long") {
+  const { year, quarter } = parseQuarter(period);
+  if (style === "short") return `T${quarter} ${year}`;
+  if (style === "months") return `${QUARTER_MONTHS[quarter - 1]} ${year}`;
+  return `${quarter}.º Trimestre ${year}`;
+}
+
+export function quarterMonths(period: string) {
+  return QUARTER_MONTHS[parseQuarter(period).quarter - 1];
+}
+
+/** Trimestre de uma data ISO. */
+export function quarterOf(date: string | Date) {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return quarterKey(d.getFullYear(), Math.floor(d.getMonth() / 3) + 1);
+}
+
+export function nextQuarter(period: string) {
+  const { year, quarter } = parseQuarter(period);
+  return quarter === 4 ? quarterKey(year + 1, 1) : quarterKey(year, quarter + 1);
+}
+
+/** Data ISO (YYYY-MM-DD) de hoje, no fuso local. */
+export function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "16 de Outubro de 2025" — formato usado nas circulares oficiais. */
+export function formatLongDatePT(value: string) {
+  const d = new Date(value + (value.length === 10 ? "T12:00:00" : ""));
+  return `${d.getDate()} de ${MONTHS_LONG[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
 export function initials(name: string) {

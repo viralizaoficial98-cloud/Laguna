@@ -85,19 +85,25 @@ export interface PublicNotice {
 // ————— Gestão do condomínio —————
 
 export type ApartmentStatus = "ocupado" | "disponivel" | "manutencao";
-export type TypologyCode = "T1" | "T2" | "T3" | "T4";
+/** O Residencial Laguna tem exclusivamente apartamentos T2, T3 e T4. */
+export type TypologyCode = "T2" | "T3" | "T4";
 
 export interface Apartment {
   id: string;
+  /** Bloco "01" a "10". */
   block: string;
   number: string;
   floor: number;
-  typology: TypologyCode;
+  /** null = tipologia ainda não confirmada pela Administração. */
+  typology: TypologyCode | null;
   status: ApartmentStatus;
+  /** false = fracção desactivada (inexistente ou fora de uso). */
+  active: boolean;
+  /** true = cadastro provisório, sujeito a validação da Administração. */
+  provisional: boolean;
   ownerName: string;
   residentId?: string;
   notes?: string;
-  monthlyQuota: number;
 }
 
 export interface Dependent {
@@ -121,12 +127,16 @@ export interface Resident {
   notes?: string;
 }
 
-export type QuotaStatus = "pendente" | "em_analise" | "aprovado" | "rejeitado" | "em_atraso";
+export type QuotaStatus = "pendente" | "em_analise" | "pago" | "em_atraso";
 
+/** Quota TRIMESTRAL do condomínio. */
 export interface Quota {
   id: string;
   apartmentId: string;
-  period: string; // YYYY-MM
+  /** Período trimestral no formato "2026-T4". */
+  period: string;
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
   description: string;
   amount: number;
   dueDate: string;
@@ -164,48 +174,110 @@ export interface Payment {
 
 export type CircularStatus = "rascunho" | "publicada" | "arquivada";
 
+export interface CircularRecipients {
+  /** "todos" = todos os moradores; "seleccao" = blocos/apartamentos escolhidos. */
+  mode: "todos" | "seleccao";
+  /** Mapa bloco → números de apartamento (lista vazia = bloco inteiro). */
+  blocks: Record<string, string[]>;
+  /** Apresentar a lista de blocos/apartamentos no corpo da circular. */
+  listInBody: boolean;
+}
+
 export interface Circular {
   id: string;
+  /** Sequência anual (1, 2, 3…). */
+  sequence: number;
+  year: number;
+  /** Referência oficial, ex.: "04/ADMLR/2026". */
   number: string;
   subject: string;
   body: string;
+  /** Texto opcional após a lista de destinatários. */
+  closing?: string;
   date: string;
   status: CircularStatus;
-  audience: string;
+  recipients: CircularRecipients;
   author: string;
   authorTitle: string;
   publishedAt?: string;
   updatedAt: string;
 }
 
+export interface NoticeAttachment {
+  name: string;
+  size: number;
+  /** PDF em data URL — apenas em memória/localStorage do browser nesta fase. */
+  dataUrl?: string;
+}
+
+export type NoticeStatus = "rascunho" | "publicado" | "retirado";
+
 export interface InternalNotice {
   id: string;
   title: string;
+  /** Descrição / resumo do comunicado. */
   body: string;
   category: PublicNotice["category"];
   date: string;
   visibility: "publico" | "moradores";
+  status: NoticeStatus;
   author: string;
   pinned?: boolean;
+  pdf?: NoticeAttachment;
+  publishedAt?: string;
+  withdrawnAt?: string;
+  updatedAt: string;
 }
 
-export type VisitStatus = "aguardando" | "no_interior" | "saiu" | "recusado";
-
-export interface Visitor {
+export interface Guest {
   id: string;
   name: string;
-  documentId: string;
-  apartmentId: string;
-  reason: string;
-  vehiclePlate?: string;
-  entryAt: string;
-  exitAt?: string;
-  status: VisitStatus;
-  registeredBy: string;
+  phone?: string;
 }
+
+/**
+ * Autorização de visita criada pelo MORADOR.
+ * A Portaria apenas consulta e confirma entradas/saídas (ver VisitCheck);
+ * a autorização original nunca é alterada pela Portaria.
+ */
+export interface Visit {
+  id: string;
+  kind: "individual" | "grupo";
+  residentId: string;
+  apartmentId: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM (horário previsto)
+  notes?: string;
+  /** Visita individual: o visitante. Grupo: lista de convidados. */
+  guests: Guest[];
+  eventName?: string;
+  eventType?: "Aniversário" | "Festa familiar" | "Reunião" | "Outro evento";
+  status: "autorizada" | "cancelada";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Registo de entrada/saída confirmado pela Portaria (histórico imutável). */
+export interface VisitCheck {
+  id: string;
+  visitId: string;
+  guestId: string;
+  type: "entrada" | "saida";
+  at: string;
+  by: string;
+}
+
+export type GuestPresence = "aguardando" | "no_interior" | "saiu";
 
 export type OccurrencePriority = "baixa" | "media" | "alta";
 export type OccurrenceStatus = "aberta" | "em_curso" | "resolvida";
+
+export interface CondoSettings {
+  /** Valor da quota trimestral (Kz). */
+  quarterlyQuota: number;
+  /** Dia limite de pagamento no 1.º mês de cada trimestre. */
+  dueDay: number;
+}
 
 export interface Occurrence {
   id: string;

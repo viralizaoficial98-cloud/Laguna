@@ -13,16 +13,31 @@ export const siteConfig = {
   description:
     "Portal institucional do Residencial Laguna, em Talatona, Luanda — infraestruturas, apartamentos, galeria, comunicados e área reservada aos moradores.",
   url: "https://residenciallaguna.ao",
+  /** Administrador oficial do condomínio. */
+  administrator: {
+    name: "José Leiria",
+    title: "Administrador do Condomínio",
+    signatureTitle: "O Administrador",
+  },
+  /** Referência usada na numeração das circulares (ex.: 04/ADMLR/2026). */
+  circularRef: "ADMLR",
   location: {
+    street: "Via S 15",
+    address: "Via S 15, Talatona",
     district: "Talatona",
     city: "Luanda",
     country: "Angola",
     full: "Talatona, Luanda, Angola",
     mapQuery: "Residencial Laguna, Talatona, Luanda, Angola",
   },
+  /** Designação usada no rodapé dos documentos oficiais (conforme a Circular N.º 04/ADMLR/2025). */
+  letterheadName: "Condomínio Laguna Residencial",
   contacts: {
-    /** Por confirmar pela administração. Deixar null até haver dados oficiais. */
-    phone: null as string | null,
+    /** Telefone do rodapé oficial (Circular N.º 04/ADMLR/2025). */
+    phone: "+244 945 177 760" as string | null,
+    /** Contacto da Administração indicado na Circular N.º 04/ADMLR/2025. */
+    adminPhone: "+244 927 527 294" as string | null,
+    /** Por confirmar pela administração. */
     email: null as string | null,
     whatsapp: null as string | null,
     officeHours: null as string | null,
@@ -52,9 +67,9 @@ export const siteStats: SiteStat[] = [
   },
   {
     label: "Blocos residenciais",
-    value: null,
-    hint: "Número oficial a confirmar pela administração",
-    confirmed: false,
+    value: "10",
+    hint: "Blocos 01 a 10, conforme documentação da Administração",
+    confirmed: true,
   },
   {
     label: "Apartamentos",
@@ -64,9 +79,9 @@ export const siteStats: SiteStat[] = [
   },
   {
     label: "Tipologias",
-    value: "T2 · T3",
-    hint: "Exemplos iniciais, sujeitos a confirmação",
-    confirmed: false,
+    value: "T2 · T3 · T4",
+    hint: "Tipologias existentes no condomínio",
+    confirmed: true,
   },
 ];
 

@@ -77,31 +77,43 @@ export const infrastructures: Infrastructure[] = [
   },
 ];
 
-/** Tipologias de exemplo — sujeitas a confirmação das tipologias reais. */
+/**
+ * Tipologias existentes no Residencial Laguna: exclusivamente T2, T3 e T4.
+ * Áreas, casas de banho e preços aguardam confirmação da Administração.
+ */
 export const typologies: Typology[] = [
   {
     slug: "t2",
     name: "Apartamento T2",
     label: "T2",
     bedrooms: 2,
-    bathrooms: 2,
-    summary:
-      "Uma tipologia equilibrada para casais e pequenas famílias, com espaços sociais luminosos e acesso às áreas comuns do condomínio.",
-    features: ["2 quartos", "Sala de estar e jantar", "Cozinha", "Acesso às piscinas e áreas comuns"],
+    bathrooms: 0,
+    summary: "Uma tipologia equilibrada para casais e pequenas famílias, com acesso às áreas comuns e de lazer do condomínio.",
+    features: ["2 quartos", "Sala e cozinha", "Acesso às piscinas e áreas comuns"],
     images: ["/images/laguna/fachadas/edificio-residencial.webp", "/images/laguna/lazer/piscina-com-palmeira.webp"],
-    confirmed: false,
+    confirmed: true,
   },
   {
     slug: "t3",
     name: "Apartamento T3",
     label: "T3",
     bedrooms: 3,
-    bathrooms: 2,
-    summary:
-      "Mais espaço para a família, combinando conforto interior com a tranquilidade de um condomínio com zonas de lazer.",
-    features: ["3 quartos", "Sala de estar e jantar", "Cozinha", "Acesso às piscinas e áreas comuns"],
+    bathrooms: 0,
+    summary: "Mais espaço para a família, combinando conforto interior com a tranquilidade de um condomínio com zonas de lazer.",
+    features: ["3 quartos", "Sala e cozinha", "Acesso às piscinas e áreas comuns"],
     images: ["/images/laguna/fachadas/blocos-residenciais.webp", "/images/laguna/lazer/piscina-vista-geral.webp"],
-    confirmed: false,
+    confirmed: true,
+  },
+  {
+    slug: "t4",
+    name: "Apartamento T4",
+    label: "T4",
+    bedrooms: 4,
+    bathrooms: 0,
+    summary: "A tipologia mais ampla do condomínio, pensada para famílias que precisam de mais quartos e espaço.",
+    features: ["4 quartos", "Sala e cozinha", "Acesso às piscinas e áreas comuns"],
+    images: ["/images/laguna/lazer/piscina-e-deck.webp", "/images/laguna/fachadas/entrada-principal.webp"],
+    confirmed: true,
   },
 ];
 

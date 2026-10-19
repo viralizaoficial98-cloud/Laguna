@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Building2, Layers, Ruler, UserRound, Users } from "lucide-react";
 import { useCurrentResident } from "@/hooks/use-session";
+import { useDemoStore } from "@/store/demo-store";
 import { formatDate, formatKz } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { AccountStatement } from "@/components/app/widgets/account-statement";
 
 export default function MeuApartamentoPage() {
   const { resident, apartment } = useCurrentResident();
+  const quarterly = useDemoStore((s) => s.settings.quarterlyQuota);
   if (!apartment || !resident) return <p className="text-sm text-graphite-500">Sem apartamento associado.</p>;
 
   return (
@@ -24,14 +26,14 @@ export default function MeuApartamentoPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-navy-950/85 to-transparent" />
             <div className="absolute bottom-5 left-6 text-white">
               <p className="text-xs tracking-[0.2em] text-gold-300 uppercase">Bloco {apartment.block}</p>
-              <p className="font-display text-4xl">Apartamento {apartment.block}-{apartment.number}</p>
+              <p className="font-display text-4xl">Apartamento {apartment.number}</p>
             </div>
           </div>
           <CardBody className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { icon: Building2, label: "Tipologia", value: apartment.typology },
+              { icon: Building2, label: "Tipologia", value: apartment.typology ?? "Por definir" },
               { icon: Layers, label: "Andar", value: `${apartment.floor}.º` },
-              { icon: Ruler, label: "Quota mensal", value: formatKz(apartment.monthlyQuota) },
+              { icon: Ruler, label: "Quota trimestral", value: formatKz(quarterly) },
               { icon: UserRound, label: "Proprietário", value: apartment.ownerName },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl bg-graphite-50 p-4">

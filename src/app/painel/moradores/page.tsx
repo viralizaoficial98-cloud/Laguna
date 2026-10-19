@@ -268,7 +268,7 @@ function ResidentForm({ open, resident, onClose, onSave }: { open: boolean; resi
               <option value="">— Não associado —</option>
               {apartments.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.block}-{a.number} · {a.typology} {a.status !== "ocupado" ? "(livre)" : ""}
+                  Bloco {a.block} · {a.number}{a.typology ? ` · ${a.typology}` : ""} {a.status !== "ocupado" ? "(livre)" : ""}
                 </option>
               ))}
             </Select>

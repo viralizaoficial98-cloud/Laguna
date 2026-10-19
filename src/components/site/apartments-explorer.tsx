@@ -27,10 +27,10 @@ export function ApartmentsExplorer({ typologies }: { typologies: Typology[] }) {
           ))}
         </div>
         <p className="text-xs text-graphite-500">
-          {filtered.length} {filtered.length === 1 ? "tipologia" : "tipologias"} · exemplos sujeitos a confirmação
+          {filtered.length} {filtered.length === 1 ? "tipologia" : "tipologias"} · áreas e preços por confirmar
         </p>
       </div>
-      <motion.div layout className="grid gap-8 md:grid-cols-2">
+      <motion.div layout className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence mode="popLayout">
           {filtered.map((t) => (
             <motion.div key={t.slug} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.4 }}>

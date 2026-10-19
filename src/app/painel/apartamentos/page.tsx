@@ -1,16 +1,16 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, Eye, Info, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Apartment } from "@/types";
-import { useDemoStore } from "@/store/demo-store";
-import { QUOTA_BY_TYPOLOGY } from "@/data/management";
-import { cn, formatKz, includesText } from "@/lib/utils";
+import { useDemoStore, formatApt } from "@/store/demo-store";
+import { BLOCKS, TYPOLOGIES, aptId } from "@/data/management";
+import { cn, includesText, uid } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,17 +20,20 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Toolbar } from "@/components/ui/toolbar";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { IconBtn } from "@/components/ui/icon-button";
 
 const schema = z.object({
-  block: z.string().min(1, "Indique o bloco."),
-  number: z.string().regex(/^\d{3}$/, "Use 3 dígitos (ex.: 302)."),
-  typology: z.enum(["T1", "T2", "T3", "T4"]),
-  floor: z.coerce.number<number>().int().min(0, "Andar inválido.").max(30, "Andar inválido."),
+  block: z.string().regex(/^\d{2}$/, "Use 2 dígitos (ex.: 06)."),
+  number: z.string().regex(/^\d{3}$/, "Use 3 dígitos (ex.: 201)."),
+  typology: z.enum(["", "T2", "T3", "T4"]),
+  floor: z.coerce.number<number>().int().min(0, "Piso inválido.").max(30, "Piso inválido."),
   status: z.enum(["ocupado", "disponivel", "manutencao"]),
-  ownerName: z.string().min(3, "Indique o proprietário."),
+  active: z.boolean(),
+  provisional: z.boolean(),
+  ownerName: z.string(),
   residentId: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -51,31 +54,41 @@ export default function ApartamentosPage() {
   const [viewing, setViewing] = useState<Apartment | null>(null);
   const [deleting, setDeleting] = useState<Apartment | null>(null);
 
-  const blocks = useMemo(() => Array.from(new Set(apartments.map((a) => a.block))).sort(), [apartments]);
+  const blocks = useMemo(() => Array.from(new Set([...BLOCKS, ...apartments.map((a) => a.block)])).sort(), [apartments]);
   const resName = (id?: string) => residents.find((r) => r.id === id)?.name;
 
   const rows = useMemo(
     () =>
       apartments
-        .filter((a) => (!block || a.block === block) && (!typology || a.typology === typology) && (!status || a.status === status))
-        .filter((a) => includesText([`${a.block}-${a.number}`, `${a.block}${a.number}`, a.ownerName, resName(a.residentId)], q))
+        .filter((a) => !block || a.block === block)
+        .filter((a) => !typology || (typology === "none" ? !a.typology : a.typology === typology))
+        .filter((a) => (status === "inactivo" ? !a.active : status ? a.active && a.status === status : true))
+        .filter((a) => includesText([formatApt(a), `${a.block}-${a.number}`, `${a.block}${a.number}`, a.number, a.ownerName, resName(a.residentId)], q))
         .sort((a, b) => (a.block + a.number).localeCompare(b.block + b.number)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [apartments, residents, block, typology, status, q],
   );
 
+  const active = apartments.filter((a) => a.active);
   const counts = {
-    ocupado: apartments.filter((a) => a.status === "ocupado").length,
-    disponivel: apartments.filter((a) => a.status === "disponivel").length,
-    manutencao: apartments.filter((a) => a.status === "manutencao").length,
+    ocupado: active.filter((a) => a.status === "ocupado").length,
+    disponivel: active.filter((a) => a.status === "disponivel").length,
+    manutencao: active.filter((a) => a.status === "manutencao").length,
+    inactivo: apartments.length - active.length,
+  };
+  const provisional = apartments.filter((a) => a.provisional).length;
+
+  const toggleActive = (a: Apartment) => {
+    saveApartment({ ...a, active: !a.active });
+    toast.success(a.active ? `${formatApt(a)} desactivado` : `${formatApt(a)} reactivado`);
   };
 
   return (
     <>
       <PageHeader
         eyebrow="Gestão"
-        title="Apartamentos"
-        description="Listagem, cadastro e edição de apartamentos, blocos, tipologias e estado de ocupação."
+        title="Blocos e apartamentos"
+        description="Cadastro das fracções por bloco: numeração, tipologia, ocupação e associação de moradores."
         actions={
           <Button onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" /> Novo apartamento
@@ -83,12 +96,24 @@ export default function ApartamentosPage() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {provisional > 0 && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 text-sm text-amber-900">
+          <Info className="mt-0.5 h-5 w-5 shrink-0" />
+          <p>
+            <strong>Cadastro provisório:</strong> {provisional} fracções foram criadas com base na numeração observada nos documentos da Administração
+            (Blocos 01 a 10, apartamentos 101 a 502). Não são unidades oficialmente confirmadas — valide cada fracção, corrija a numeração, defina a
+            tipologia (T2, T3 ou T4) e desactive as inexistentes.
+          </p>
+        </div>
+      )}
+
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
-          { label: "Total", value: apartments.length, s: "" },
-          { label: "Ocupados", value: counts.ocupado, s: "ocupado" },
+          { label: "Fracções activas", value: active.length, s: "" },
+          { label: "Ocupadas", value: counts.ocupado, s: "ocupado" },
           { label: "Disponíveis", value: counts.disponivel, s: "disponivel" },
           { label: "Em manutenção", value: counts.manutencao, s: "manutencao" },
+          { label: "Desactivadas", value: counts.inactivo, s: "inactivo" },
         ].map((c) => (
           <button
             key={c.label}
@@ -103,7 +128,7 @@ export default function ApartamentosPage() {
 
       <Card>
         <Toolbar>
-          <SearchInput value={q} onChange={setQ} placeholder="Pesquisar por número, proprietário ou morador…" className="sm:w-80" />
+          <SearchInput value={q} onChange={setQ} placeholder="Pesquisar por apartamento, proprietário ou morador…" className="sm:w-80" />
           <div className="grid grid-cols-3 gap-2 sm:flex">
             <Select value={block} onChange={(e) => setBlock(e.target.value)} aria-label="Filtrar por bloco" className="sm:w-36">
               <option value="">Todos os blocos</option>
@@ -113,20 +138,22 @@ export default function ApartamentosPage() {
                 </option>
               ))}
             </Select>
-            <Select value={typology} onChange={(e) => setTypology(e.target.value)} aria-label="Filtrar por tipologia" className="sm:w-36">
+            <Select value={typology} onChange={(e) => setTypology(e.target.value)} aria-label="Filtrar por tipologia" className="sm:w-40">
               <option value="">Tipologias</option>
-              {["T1", "T2", "T3", "T4"].map((t) => (
+              {TYPOLOGIES.map((t) => (
                 <option key={t}>{t}</option>
               ))}
+              <option value="none">Por definir</option>
             </Select>
             <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrar por estado" className="sm:w-40">
               <option value="">Estados</option>
               <option value="ocupado">Ocupado</option>
               <option value="disponivel">Disponível</option>
               <option value="manutencao">Manutenção</option>
+              <option value="inactivo">Desactivado</option>
             </Select>
           </div>
-          <DemoDataNote className="sm:ml-auto" />
+          <DemoDataNote className="sm:ml-auto">Ocupação e moradores fictícios</DemoDataNote>
         </Toolbar>
         <DataTable
           rows={rows}
@@ -138,22 +165,33 @@ export default function ApartamentosPage() {
               header: "Apartamento",
               primary: true,
               cell: (a) => (
-                <span className="flex items-center gap-2.5">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-50 text-xs font-bold text-navy-800">{a.block}</span>
+                <span className={cn("flex items-center gap-2.5", !a.active && "opacity-50")}>
+                  <span className="flex h-9 w-9 flex-col items-center justify-center rounded-xl bg-navy-50 leading-none text-navy-800">
+                    <span className="text-[8px] font-semibold uppercase">Bl.</span>
+                    <span className="text-xs font-bold">{a.block}</span>
+                  </span>
                   <span>
-                    <span className="block font-semibold text-navy-900">
-                      {a.block}-{a.number}
+                    <span className="block font-semibold text-navy-900">{a.number}</span>
+                    <span className="block text-xs text-graphite-500">
+                      Bloco {a.block} · {a.floor}.º piso
                     </span>
-                    <span className="block text-xs text-graphite-500">{a.floor}.º andar</span>
                   </span>
                 </span>
               ),
             },
-            { key: "typology", header: "Tipologia", cell: (a) => <span className="font-medium">{a.typology}</span> },
-            { key: "owner", header: "Proprietário", cell: (a) => a.ownerName },
-            { key: "resident", header: "Morador responsável", cell: (a) => resName(a.residentId) ?? <span className="text-graphite-400">—</span>, hideOnMobile: true },
-            { key: "quota", header: "Quota", align: "right", cell: (a) => <span className="tabular-nums">{formatKz(a.monthlyQuota)}</span>, hideOnMobile: true },
-            { key: "status", header: "Estado", cell: (a) => <StatusBadge status={a.status} /> },
+            { key: "typology", header: "Tipologia", cell: (a) => (a.typology ? <span className="font-medium">{a.typology}</span> : <span className="text-xs text-graphite-400 italic">Por definir</span>) },
+            { key: "owner", header: "Proprietário", cell: (a) => a.ownerName || <span className="text-graphite-400">—</span> },
+            { key: "resident", header: "Morador", cell: (a) => resName(a.residentId) ?? <span className="text-graphite-400">—</span>, hideOnMobile: true },
+            {
+              key: "status",
+              header: "Estado",
+              cell: (a) => (
+                <span className="flex flex-wrap gap-1">
+                  {a.active ? <StatusBadge status={a.status} /> : <Badge>Desactivado</Badge>}
+                  {a.provisional && <Badge tone="warning">Provisório</Badge>}
+                </span>
+              ),
+            },
             {
               key: "actions",
               header: "",
@@ -165,6 +203,9 @@ export default function ApartamentosPage() {
                   </IconBtn>
                   <IconBtn label="Editar" onClick={() => setEditing(a)}>
                     <Pencil className="h-4 w-4" />
+                  </IconBtn>
+                  <IconBtn label={a.active ? "Desactivar" : "Reactivar"} onClick={() => toggleActive(a)}>
+                    <Power className={cn("h-4 w-4", a.active ? "" : "text-emerald-700")} />
                   </IconBtn>
                   <IconBtn label="Eliminar" danger onClick={() => setDeleting(a)}>
                     <Trash2 className="h-4 w-4" />
@@ -184,29 +225,40 @@ export default function ApartamentosPage() {
         onSave={(apt) => {
           const exists = apartments.some((a) => a.id === apt.id);
           saveApartment(apt);
-          toast.success(exists ? "Apartamento actualizado" : "Apartamento criado", { description: `${apt.block}-${apt.number} · alterações locais (demo).` });
+          toast.success(exists ? "Apartamento actualizado" : "Apartamento adicionado", { description: `${formatApt(apt)} · alterações locais (demo).` });
           setEditing(null);
         }}
       />
 
-      <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `Apartamento ${viewing.block}-${viewing.number}` : ""} description="Detalhes do apartamento" footer={
-        viewing && (
-          <Button onClick={() => { setEditing(viewing); setViewing(null); }}>
-            <Pencil className="h-4 w-4" /> Editar
-          </Button>
-        )
-      }>
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? formatApt(viewing) : ""}
+        description="Detalhes da fracção"
+        footer={
+          viewing && (
+            <Button
+              onClick={() => {
+                setEditing(viewing);
+                setViewing(null);
+              }}
+            >
+              <Pencil className="h-4 w-4" /> Editar
+            </Button>
+          )
+        }
+      >
         {viewing && (
           <dl className="grid grid-cols-2 gap-4 text-sm">
             {[
               ["Bloco", viewing.block],
               ["Número", viewing.number],
-              ["Andar", `${viewing.floor}.º`],
-              ["Tipologia", viewing.typology],
-              ["Estado", <StatusBadge key="s" status={viewing.status} />],
-              ["Quota mensal", formatKz(viewing.monthlyQuota)],
-              ["Proprietário", viewing.ownerName],
-              ["Morador responsável", resName(viewing.residentId) ?? "—"],
+              ["Piso", `${viewing.floor}.º`],
+              ["Tipologia", viewing.typology ?? "Por definir"],
+              ["Estado", viewing.active ? <StatusBadge key="s" status={viewing.status} /> : "Desactivado"],
+              ["Cadastro", viewing.provisional ? "Provisório (por validar)" : "Validado"],
+              ["Proprietário", viewing.ownerName || "—"],
+              ["Morador associado", resName(viewing.residentId) ?? "—"],
             ].map(([k, v]) => (
               <div key={String(k)} className="rounded-xl bg-graphite-50 p-3">
                 <dt className="text-xs text-graphite-500">{k}</dt>
@@ -224,8 +276,8 @@ export default function ApartamentosPage() {
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        title={`Eliminar apartamento ${deleting?.block}-${deleting?.number}?`}
-        description="A alteração é apenas local (demonstração) e pode ser revertida repondo os dados de demonstração."
+        title={`Eliminar ${deleting ? formatApt(deleting) : ""}?`}
+        description="Prefira desactivar fracções inexistentes para manter o histórico. Esta alteração é apenas local (demonstração)."
         confirmLabel="Eliminar"
         onConfirm={() => {
           if (deleting) deleteApartment(deleting.id);
@@ -247,27 +299,29 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: apartment
-      ? { ...apartment, residentId: apartment.residentId ?? "", notes: apartment.notes ?? "" }
-      : { block: "A", number: "", typology: "T2", floor: 1, status: "disponivel", ownerName: "", residentId: "", notes: "" },
+      ? { ...apartment, typology: apartment.typology ?? "", residentId: apartment.residentId ?? "", notes: apartment.notes ?? "" }
+      : { block: "01", number: "", typology: "", floor: 1, status: "disponivel", active: true, provisional: false, ownerName: "", residentId: "", notes: "" },
   });
 
   const submit = (d: FormData) => {
-    const id = apartment?.id ?? `apt_${d.block}${d.number}`;
-    if (!apartment && apartments.some((a) => a.id === id)) {
-      setError("number", { message: "Já existe um apartamento com este número neste bloco." });
+    const duplicate = apartments.some((a) => a.block === d.block && a.number === d.number && a.id !== apartment?.id);
+    if (duplicate) {
+      setError("number", { message: `Já existe o apartamento ${d.number} no Bloco ${d.block}.` });
       return;
     }
+    const id = apartment?.id ?? (apartments.some((a) => a.id === aptId(d.block, d.number)) ? uid("apt") : aptId(d.block, d.number));
     onSave({
       id,
-      block: d.block.toUpperCase(),
+      block: d.block,
       number: d.number,
       floor: d.floor,
-      typology: d.typology,
+      typology: d.typology || null,
       status: d.status,
+      active: d.active,
+      provisional: d.provisional,
       ownerName: d.ownerName,
       residentId: d.residentId || undefined,
       notes: d.notes || undefined,
-      monthlyQuota: QUOTA_BY_TYPOLOGY[d.typology],
     });
   };
 
@@ -276,7 +330,7 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
       open={open}
       onClose={onClose}
       size="lg"
-      title={apartment ? `Editar ${apartment.block}-${apartment.number}` : "Novo apartamento"}
+      title={apartment ? `Editar ${formatApt(apartment)}` : "Novo apartamento"}
       description="Os dados são guardados apenas no browser (demonstração)."
       footer={
         <>
@@ -291,32 +345,39 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
     >
       <form id="apt-form" onSubmit={handleSubmit(submit)} noValidate className="grid gap-4 sm:grid-cols-2">
         <Field label="Bloco" required error={errors.block?.message}>
-          <Input {...register("block")} disabled={!!apartment} invalid={!!errors.block} />
+          <Select {...register("block")} invalid={!!errors.block}>
+            {BLOCKS.map((b) => (
+              <option key={b} value={b}>
+                Bloco {b}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <Field label="Número do apartamento" required error={errors.number?.message}>
-          <Input {...register("number")} disabled={!!apartment} placeholder="302" invalid={!!errors.number} />
+        <Field label="Número do apartamento" required error={errors.number?.message} hint="Ex.: 101, 102, 201…">
+          <Input {...register("number")} placeholder="201" invalid={!!errors.number} />
         </Field>
-        <Field label="Tipologia" required>
+        <Field label="Tipologia" hint="Apenas T2, T3 ou T4">
           <Select {...register("typology")}>
-            {["T1", "T2", "T3", "T4"].map((t) => (
+            <option value="">Por definir</option>
+            {TYPOLOGIES.map((t) => (
               <option key={t}>{t}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Andar" required error={errors.floor?.message}>
+        <Field label="Piso" required error={errors.floor?.message}>
           <Input type="number" {...register("floor")} invalid={!!errors.floor} />
         </Field>
-        <Field label="Estado" required>
+        <Field label="Estado de ocupação" required>
           <Select {...register("status")}>
             <option value="ocupado">Ocupado</option>
             <option value="disponivel">Disponível</option>
             <option value="manutencao">Manutenção</option>
           </Select>
         </Field>
-        <Field label="Proprietário" required error={errors.ownerName?.message}>
-          <Input {...register("ownerName")} invalid={!!errors.ownerName} />
+        <Field label="Proprietário">
+          <Input {...register("ownerName")} />
         </Field>
-        <Field label="Morador responsável" className="sm:col-span-2">
+        <Field label="Morador associado" className="sm:col-span-2">
           <Select {...register("residentId")}>
             <option value="">— Sem morador associado —</option>
             {residents.map((r) => (
@@ -327,8 +388,14 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
           </Select>
         </Field>
         <Field label="Observações" className="sm:col-span-2">
-          <Textarea rows={3} {...register("notes")} />
+          <Textarea rows={2} {...register("notes")} />
         </Field>
+        <label className="flex items-center gap-2 text-sm text-graphite-700">
+          <input type="checkbox" className="h-4 w-4 accent-navy-900" {...register("active")} /> Fracção activa (existente)
+        </label>
+        <label className="flex items-center gap-2 text-sm text-graphite-700">
+          <input type="checkbox" className="h-4 w-4 accent-navy-900" {...register("provisional")} /> Cadastro provisório (por validar)
+        </label>
       </form>
     </Modal>
   );

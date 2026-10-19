@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { Payment } from "@/types";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
-import { formatBytes, formatDateTime, formatKz, formatPeriod } from "@/lib/utils";
+import { formatBytes, formatDateTime, formatKz, formatQuarter } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
@@ -54,7 +54,7 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
       onClose={close}
       size="lg"
       title="Comprovativo de pagamento"
-      description={`${aptLabel(apartments, payment.apartmentId)} · ${quota ? formatPeriod(quota.period, true) : ""}`}
+      description={`${aptLabel(apartments, payment.apartmentId)} · ${quota ? formatQuarter(quota.period) : ""}`}
       footer={
         canReview ? (
           <>

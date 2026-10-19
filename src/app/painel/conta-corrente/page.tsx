@@ -23,7 +23,7 @@ export default function ContaCorrentePage() {
             <Select value={aptId} onChange={(e) => setAptId(e.target.value)}>
               {occupied.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.block}-{a.number} · {a.typology}
+                  Bloco {a.block} · {a.number}{a.typology ? ` · ${a.typology}` : ""}
                 </option>
               ))}
             </Select>

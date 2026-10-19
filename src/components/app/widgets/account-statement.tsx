@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
 import { CURRENT_PERIOD } from "@/hooks/use-finance";
-import { cn, downloadCsv, formatDate, formatKz, formatPeriod } from "@/lib/utils";
+import { cn, downloadCsv, formatDate, formatKz, formatQuarter } from "@/lib/utils";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -32,7 +32,7 @@ export function AccountStatement({ apartmentId }: { apartmentId: string }) {
     const list: Movement[] = [];
     quotas
       .filter((q) => q.apartmentId === apartmentId && q.period <= CURRENT_PERIOD)
-      .forEach((q) => list.push({ id: q.id, date: `${q.period}-01`, description: `Quota ${formatPeriod(q.period, true)}`, debit: q.amount, credit: 0, status: q.status }));
+      .forEach((q) => list.push({ id: q.id, date: q.dueDate, description: `Quota do ${formatQuarter(q.period)}`, debit: q.amount, credit: 0, status: q.status }));
     payments
       .filter((p) => p.apartmentId === apartmentId && p.status === "aprovado")
       .forEach((p) => list.push({ id: p.id, date: p.paidAt.slice(0, 10), description: `Pagamento ${p.reference}`, debit: 0, credit: p.amount, status: "aprovado" }));
@@ -59,7 +59,7 @@ export function AccountStatement({ apartmentId }: { apartmentId: string }) {
     <Card className="print-area">
       <CardHeader
         title={`Extracto — Apartamento ${aptLabel(apartments, apartmentId)}`}
-        description={`${resident?.name ?? "Sem morador"} · até ${formatPeriod(CURRENT_PERIOD, true)}`}
+        description={`${resident?.name ?? "Sem morador"} · até ao ${formatQuarter(CURRENT_PERIOD)}`}
         action={
           <div className="no-print flex gap-2">
             <Button size="sm" variant="outline" onClick={exportCsv}>

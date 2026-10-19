@@ -1,7 +1,11 @@
 /**
  * DADOS DE DEMONSTRAÇÃO da área de gestão.
- * Todos os nomes, apartamentos, valores e registos são fictícios e servem
- * apenas para testar a interface. Não representam informação real do condomínio.
+ *
+ * - Estrutura de blocos (01 a 10) e numeração (101 a 502) segue a Circular
+ *   N.º 04/ADMLR/2025, aplicada como CADASTRO PROVISÓRIO: não confirma que
+ *   todos os blocos tenham exactamente estas fracções.
+ * - As tipologias ficam "por definir" (null) até confirmação da Administração.
+ * - Moradores, ocupação, pagamentos, visitas e ocorrências são fictícios.
  */
 import type {
   AccessLog,
@@ -9,27 +13,59 @@ import type {
   AppNotification,
   Circular,
   CondoDocument,
+  CondoSettings,
   InternalNotice,
   Occurrence,
   Payment,
   PaymentMethod,
   Quota,
   Resident,
-  TypologyCode,
-  Visitor,
+  Visit,
+  VisitCheck,
 } from "@/types";
-import { seededRandom } from "@/lib/utils";
+import { parseQuarter, seededRandom } from "@/lib/utils";
 
-export const DEMO_TODAY = "2026-10-18";
+export const DEMO_TODAY = "2026-10-19";
+export const ADMIN_NAME = "José Leiria";
+export const ADMIN_TITLE = "Administrador do Condomínio";
 
-export const DEMO_BLOCKS = ["A", "B", "C"];
-export const QUOTA_BY_TYPOLOGY: Record<TypologyCode, number> = {
-  T1: 35000,
-  T2: 45000,
-  T3: 60000,
-  T4: 75000,
+/** Blocos identificados na documentação da Administração. */
+export const BLOCKS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"];
+
+/** Proposta inicial de fracções por piso (provisória). */
+export const PROVISIONAL_LAYOUT: { floor: number; numbers: string[] }[] = [
+  { floor: 1, numbers: ["101", "102"] },
+  { floor: 2, numbers: ["201", "202"] },
+  { floor: 3, numbers: ["301", "302"] },
+  { floor: 4, numbers: ["401", "402"] },
+  { floor: 5, numbers: ["501", "502"] },
+];
+
+export const TYPOLOGIES = ["T2", "T3", "T4"] as const;
+
+/** Configuração em vigor — editável pelo Administrador em "Quotas trimestrais". */
+export const DEFAULT_SETTINGS: CondoSettings = {
+  quarterlyQuota: 300_000,
+  dueDay: 15,
 };
-export const QUOTA_PERIODS = ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"];
+
+export const QUOTA_PERIODS = ["2025-T4", "2026-T1", "2026-T2", "2026-T3", "2026-T4"];
+
+export function aptId(block: string, number: string) {
+  return `apt_${block}_${number}`;
+}
+
+/** Data limite: dia configurado do 1.º mês do trimestre. */
+export function quotaDueDate(period: string, dueDay: number) {
+  const { year, quarter } = parseQuarter(period);
+  const month = (quarter - 1) * 3 + 1;
+  return `${year}-${String(month).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`;
+}
+
+export function quotaDescription(period: string) {
+  const { year, quarter } = parseQuarter(period);
+  return `Quota trimestral — ${quarter}.º Trimestre ${year}`;
+}
 
 const FIRST = ["Ana", "João", "Maria", "Pedro", "Isabel", "António", "Luísa", "Manuel", "Rosa", "Francisco", "Teresa", "Carlos", "Joana", "Miguel", "Sara", "Rui", "Beatriz", "Alberto", "Fernanda", "Nelson", "Edna", "Válter", "Celeste", "Augusto", "Yolanda", "Mário", "Esperança", "Bruno", "Lurdes", "Hélder"];
 const LAST = ["Domingos", "Baptista", "Fernandes", "Silva", "Neto", "Mateus", "Lopes", "Gaspar", "Cristóvão", "Tavares", "Pinto", "Sousa", "Manuel", "Costa", "Bento", "Jorge", "Vieira", "Gomes", "Simão", "Pascoal", "Miranda", "Quintas", "Lemos", "Correia"];
@@ -56,37 +92,40 @@ export interface ManagementSeed {
   payments: Payment[];
 }
 
-export function createManagementSeed(): ManagementSeed {
+export const DEMO_RESIDENT_APT = aptId("06", "201");
+/** Fracções com moradores usados nos exemplos de visitas. */
+const FORCED_OCCUPIED = new Set([DEMO_RESIDENT_APT, aptId("03", "102"), aptId("08", "401"), aptId("10", "502"), aptId("01", "101"), aptId("03", "202")]);
+
+export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS): ManagementSeed {
   const r = seededRandom(2026);
   const apartments: Apartment[] = [];
   const residents: Resident[] = [];
 
-  for (const block of DEMO_BLOCKS) {
-    for (let floor = 1; floor <= 6; floor++) {
-      for (let pos = 1; pos <= 4; pos++) {
-        const number = `${floor}0${pos}`;
-        const id = `apt_${block}${number}`;
-        const typology: TypologyCode = pos === 1 || pos === 4 ? "T3" : "T2";
+  for (const block of BLOCKS) {
+    for (const { floor, numbers } of PROVISIONAL_LAYOUT) {
+      for (const number of numbers) {
+        const id = aptId(block, number);
+        const isDemoApt = id === DEMO_RESIDENT_APT;
         const roll = r();
-        const isDemoApt = block === "B" && number === "302";
-        const status = isDemoApt ? "ocupado" : roll < 0.84 ? "ocupado" : roll < 0.95 ? "disponivel" : "manutencao";
-        const ownerName = `${pick(FIRST, r)} ${pick(LAST, r)}`;
+        const status = FORCED_OCCUPIED.has(id) ? "ocupado" : roll < 0.86 ? "ocupado" : roll < 0.96 ? "disponivel" : "manutencao";
+        const ownerName = isDemoApt ? "Carla Mendes" : `${pick(FIRST, r)} ${pick(LAST, r)}`;
         const apt: Apartment = {
           id,
           block,
           number,
           floor,
-          typology,
+          typology: null,
           status,
+          active: true,
+          provisional: true,
           ownerName,
-          monthlyQuota: QUOTA_BY_TYPOLOGY[typology],
           notes: status === "manutencao" ? "Obras de manutenção interior em curso (demo)." : undefined,
         };
         if (status === "ocupado") {
-          const isOwner = r() < 0.7;
+          const isOwner = isDemoApt || r() < 0.7;
           const name = isDemoApt ? "Carla Mendes" : isOwner ? ownerName : `${pick(FIRST, r)} ${pick(LAST, r)}`;
-          const resId = isDemoApt ? "res_demo" : `res_${block}${number}`;
-          const depCount = Math.floor(r() * 3);
+          const resId = isDemoApt ? "res_demo" : `res_${block}_${number}`;
+          const depCount = isDemoApt ? 2 : Math.floor(r() * 3);
           residents.push({
             id: resId,
             name,
@@ -94,10 +133,10 @@ export function createManagementSeed(): ManagementSeed {
             phone: `+244 9${Math.floor(10 + r() * 89)} ${Math.floor(100 + r() * 899)} ${Math.floor(100 + r() * 899)}`,
             documentId: `00${Math.floor(1000000 + r() * 8999999)}LA0${Math.floor(10 + r() * 89)}`,
             apartmentId: id,
-            type: isDemoApt ? "proprietario" : isOwner ? "proprietario" : "inquilino",
-            status: r() < 0.94 ? "activo" : "inactivo",
+            type: isOwner ? "proprietario" : "inquilino",
+            status: isDemoApt || r() < 0.94 ? "activo" : "inactivo",
             since: `20${18 + Math.floor(r() * 8)}-0${1 + Math.floor(r() * 9)}-1${Math.floor(r() * 9)}`,
-            dependents: Array.from({ length: isDemoApt ? 2 : depCount }, (_, k) => ({
+            dependents: Array.from({ length: depCount }, (_, k) => ({
               id: `dep_${resId}_${k}`,
               name: `${pick(FIRST, r)} ${name.split(" ").at(-1)}`,
               relation: k === 0 ? "Cônjuge" : "Filho(a)",
@@ -105,7 +144,6 @@ export function createManagementSeed(): ManagementSeed {
             })),
           });
           apt.residentId = resId;
-          if (isDemoApt) apt.ownerName = "Carla Mendes";
         }
         apartments.push(apt);
       }
@@ -114,58 +152,55 @@ export function createManagementSeed(): ManagementSeed {
 
   const quotas: Quota[] = [];
   const payments: Payment[] = [];
-  const occupied = apartments.filter((a) => a.status === "ocupado");
 
-  for (const apt of occupied) {
-    const isDemo = apt.residentId === "res_demo";
+  for (const apt of apartments.filter((a) => a.status === "ocupado")) {
+    const isDemo = apt.id === DEMO_RESIDENT_APT;
     QUOTA_PERIODS.forEach((period, idx) => {
-      const id = `quo_${apt.id}_${period}`;
+      const { year, quarter } = parseQuarter(period);
+      const dueDate = quotaDueDate(period, settings.dueDay);
       const quota: Quota = {
-        id,
+        id: `quo_${apt.id}_${period}`,
         apartmentId: apt.id,
         period,
-        description: "Quota mensal de condomínio",
-        amount: apt.monthlyQuota,
-        dueDate: `${period}-25`,
+        year,
+        quarter,
+        description: quotaDescription(period),
+        amount: settings.quarterlyQuota,
+        dueDate,
         status: "pendente",
       };
       const roll = r();
       let status: Quota["status"];
-      if (isDemo) {
-        status = idx <= 4 ? "aprovado" : "pendente";
-      } else if (idx <= 3) {
-        status = roll < 0.9 ? "aprovado" : "em_atraso";
-      } else if (idx === 4) {
-        status = roll < 0.78 ? "aprovado" : roll < 0.88 ? "em_analise" : "em_atraso";
-      } else if (idx === 5) {
-        status = roll < 0.45 ? "aprovado" : roll < 0.62 ? "em_analise" : roll < 0.67 ? "rejeitado" : "pendente";
-      } else {
-        status = roll < 0.06 ? "em_analise" : "pendente";
-      }
+      if (isDemo) status = idx < QUOTA_PERIODS.length - 1 ? "pago" : "pendente";
+      else if (idx <= 2) status = roll < 0.92 ? "pago" : "em_atraso";
+      else if (idx === 3) status = roll < 0.84 ? "pago" : "em_atraso";
+      else status = roll < 0.42 ? "pago" : roll < 0.6 ? "em_analise" : "pendente";
+      // Quotas não pagas após a data limite ficam "Em atraso"
+      if (status === "pendente" && dueDate < DEMO_TODAY) status = "em_atraso";
       quota.status = status;
 
-      if (status === "aprovado" || status === "em_analise" || status === "rejeitado") {
-        // pagamentos antecipados de quotas futuras ficam datados no mês corrente (nunca depois de hoje)
-        const [y, m] = (period > DEMO_TODAY.slice(0, 7) ? DEMO_TODAY.slice(0, 7) : period).split("-").map(Number);
-        const isCurrentMonth = `${y}-${String(m).padStart(2, "0")}` === DEMO_TODAY.slice(0, 7);
-        const day = isCurrentMonth ? 1 + Math.floor(r() * 17) : 5 + Math.floor(r() * 18);
-        const paidAt = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(8 + Math.floor(r() * 10)).padStart(2, "0")}:${String(Math.floor(r() * 59)).padStart(2, "0")}:00`;
+      if (status === "pago" || status === "em_analise") {
+        // pagamento entre 20 dias antes e 25 dias depois do início do trimestre (nunca depois de hoje)
+        const base = new Date(`${dueDate}T10:00:00`);
+        base.setDate(base.getDate() - 34 + Math.floor(r() * 45));
+        const max = new Date(`${DEMO_TODAY}T09:00:00`);
+        const paid = base > max ? max : base;
+        const paidAt = `${paid.getFullYear()}-${String(paid.getMonth() + 1).padStart(2, "0")}-${String(paid.getDate()).padStart(2, "0")}T${String(8 + Math.floor(r() * 9)).padStart(2, "0")}:${String(Math.floor(r() * 59)).padStart(2, "0")}:00`;
         const method = pick(METHODS, r);
         const pay: Payment = {
           id: `pay_${apt.id}_${period}`,
-          quotaId: id,
+          quotaId: quota.id,
           apartmentId: apt.id,
           residentId: apt.residentId,
-          amount: apt.monthlyQuota,
+          amount: quota.amount,
           method,
           reference: `${method === "multicaixa" ? "MCX" : method === "deposito" ? "DEP" : "TRF"}-${Math.floor(100000 + r() * 899999)}`,
           paidAt,
           submittedAt: paidAt,
-          proof: { name: `comprovativo-${apt.block}${apt.number}-${period}.pdf`, type: "application/pdf", size: Math.floor(80000 + r() * 400000) },
-          status: status === "aprovado" ? "aprovado" : status === "rejeitado" ? "rejeitado" : "em_analise",
-          reviewedBy: status === "em_analise" ? undefined : "Marta Neto",
-          reviewedAt: status === "em_analise" ? undefined : paidAt,
-          note: status === "rejeitado" ? "Comprovativo ilegível. Por favor, envie novamente." : undefined,
+          proof: { name: `comprovativo-B${apt.block}-${apt.number}-${period}.pdf`, type: "application/pdf", size: Math.floor(80000 + r() * 400000) },
+          status: status === "pago" ? "aprovado" : "em_analise",
+          reviewedBy: status === "pago" ? ADMIN_NAME : undefined,
+          reviewedAt: status === "pago" ? paidAt : undefined,
         };
         payments.push(pay);
         quota.paymentId = pay.id;
@@ -177,88 +212,219 @@ export function createManagementSeed(): ManagementSeed {
   return { apartments, residents, quotas, payments };
 }
 
-function aptId(block: string, number: string) {
-  return `apt_${block}${number}`;
-}
+// ————— Visitas (autorizadas pelos moradores) —————
 
-export const seedVisitors: Visitor[] = [
-  { id: "vis_1", name: "Jorge Kapitango", documentId: "004512398LA041", apartmentId: aptId("B", "302"), reason: "Visita familiar", entryAt: "2026-10-18T09:15:00", status: "no_interior", registeredBy: "Domingos Kiala" },
-  { id: "vis_2", name: "Técnico — Assistência AC", documentId: "002398112LA032", apartmentId: aptId("A", "204"), reason: "Prestação de serviço", vehiclePlate: "LD-45-21-AB", entryAt: "2026-10-18T08:40:00", status: "no_interior", registeredBy: "Domingos Kiala" },
-  { id: "vis_3", name: "Entrega — Encomenda", documentId: "—", apartmentId: aptId("C", "501"), reason: "Entrega", entryAt: "2026-10-18T10:05:00", exitAt: "2026-10-18T10:12:00", status: "saiu", registeredBy: "Domingos Kiala" },
-  { id: "vis_4", name: "Rita Mussungo", documentId: "005671234LA019", apartmentId: aptId("A", "103"), reason: "Visita pessoal", entryAt: "2026-10-18T10:30:00", status: "aguardando", registeredBy: "Domingos Kiala" },
-  { id: "vis_5", name: "Eduardo Chipenda", documentId: "001234987LA011", apartmentId: aptId("C", "202"), reason: "Reunião", entryAt: "2026-10-17T16:20:00", exitAt: "2026-10-17T18:02:00", status: "saiu", registeredBy: "Domingos Kiala" },
-  { id: "vis_6", name: "Canalizador — Obras B", documentId: "007712311LA050", apartmentId: aptId("B", "601"), reason: "Manutenção", vehiclePlate: "LD-12-88-CF", entryAt: "2026-10-17T09:00:00", exitAt: "2026-10-17T13:45:00", status: "saiu", registeredBy: "Domingos Kiala" },
-  { id: "vis_7", name: "Desconhecido (sem identificação)", documentId: "—", apartmentId: aptId("A", "402"), reason: "Não indicou", entryAt: "2026-10-17T21:10:00", status: "recusado", registeredBy: "Turno da noite" },
-  { id: "vis_8", name: "Lúcia Ngola", documentId: "003398765LA027", apartmentId: aptId("B", "104"), reason: "Visita familiar", entryAt: "2026-10-16T15:00:00", exitAt: "2026-10-16T19:30:00", status: "saiu", registeredBy: "Domingos Kiala" },
-  { id: "vis_9", name: "Entrega — Supermercado", documentId: "—", apartmentId: aptId("C", "603"), reason: "Entrega", entryAt: "2026-10-16T11:22:00", exitAt: "2026-10-16T11:30:00", status: "saiu", registeredBy: "Domingos Kiala" },
-  { id: "vis_10", name: "Simão Capemba", documentId: "006645123LA033", apartmentId: aptId("A", "301"), reason: "Visita pessoal", entryAt: "2026-10-15T18:40:00", exitAt: "2026-10-15T22:10:00", status: "saiu", registeredBy: "Turno da noite" },
+const g = (id: string, name: string, phone?: string) => ({ id, name, phone });
+
+export const seedVisits: Visit[] = [
+  {
+    id: "vis_1",
+    kind: "individual",
+    residentId: "res_demo",
+    apartmentId: DEMO_RESIDENT_APT,
+    date: "2026-10-19",
+    time: "09:00",
+    guests: [g("gst_1", "Jorge Kapitango", "+244 923 000 111")],
+    notes: "Familiar — almoço.",
+    status: "autorizada",
+    createdAt: "2026-10-18T20:10:00",
+    updatedAt: "2026-10-18T20:10:00",
+  },
+  {
+    id: "vis_2",
+    kind: "individual",
+    residentId: "res_03_102",
+    apartmentId: aptId("03", "102"),
+    date: "2026-10-19",
+    time: "10:30",
+    guests: [g("gst_2", "Rita Mussungo")],
+    status: "autorizada",
+    createdAt: "2026-10-19T08:00:00",
+    updatedAt: "2026-10-19T08:00:00",
+  },
+  {
+    id: "vis_3",
+    kind: "grupo",
+    residentId: "res_demo",
+    apartmentId: DEMO_RESIDENT_APT,
+    date: "2026-10-25",
+    time: "15:00",
+    eventName: "Aniversário da Sofia",
+    eventType: "Aniversário",
+    notes: "Festa no apartamento. Convidados chegam a partir das 15h.",
+    guests: [
+      "Ana Baptista", "Pedro Neto", "Isabel Gaspar", "Miguel Tavares", "Sara Lopes", "Bruno Costa", "Celeste Pinto", "Augusto Simão",
+      "Yolanda Mateus", "Nelson Vieira", "Edna Correia", "Hélder Gomes", "Lurdes Bento", "Válter Jorge", "Joana Miranda",
+    ].map((n, i) => g(`gst_3_${i}`, n)),
+    status: "autorizada",
+    createdAt: "2026-10-17T19:00:00",
+    updatedAt: "2026-10-17T19:00:00",
+  },
+  {
+    id: "vis_4",
+    kind: "grupo",
+    residentId: "res_08_401",
+    apartmentId: aptId("08", "401"),
+    date: "2026-10-19",
+    time: "18:00",
+    eventName: "Reunião familiar",
+    eventType: "Festa familiar",
+    guests: ["Francisco Lemos", "Teresa Lemos", "Carlos Quintas", "Beatriz Quintas", "Rui Sousa", "Mário Fernandes"].map((n, i) => g(`gst_4_${i}`, n)),
+    status: "autorizada",
+    createdAt: "2026-10-16T12:00:00",
+    updatedAt: "2026-10-16T12:00:00",
+  },
+  {
+    id: "vis_5",
+    kind: "individual",
+    residentId: "res_10_502",
+    apartmentId: aptId("10", "502"),
+    date: "2026-10-18",
+    time: "16:00",
+    guests: [g("gst_5", "Eduardo Chipenda")],
+    status: "autorizada",
+    createdAt: "2026-10-17T09:00:00",
+    updatedAt: "2026-10-17T09:00:00",
+  },
+  {
+    id: "vis_6",
+    kind: "individual",
+    residentId: "res_01_101",
+    apartmentId: aptId("01", "101"),
+    date: "2026-10-21",
+    time: "11:00",
+    guests: [g("gst_6", "Lúcia Ngola")],
+    status: "autorizada",
+    createdAt: "2026-10-19T07:30:00",
+    updatedAt: "2026-10-19T07:30:00",
+  },
+];
+
+export const seedVisitChecks: VisitCheck[] = [
+  { id: "chk_1", visitId: "vis_1", guestId: "gst_1", type: "entrada", at: "2026-10-19T09:12:00", by: "Portaria" },
+  { id: "chk_2", visitId: "vis_5", guestId: "gst_5", type: "entrada", at: "2026-10-18T16:05:00", by: "Portaria" },
+  { id: "chk_3", visitId: "vis_5", guestId: "gst_5", type: "saida", at: "2026-10-18T18:40:00", by: "Portaria" },
 ];
 
 export const seedAccessLogs: AccessLog[] = (() => {
   const r = seededRandom(77);
-  const people = ["Carla Mendes", "Nelson Pinto", "Edna Gaspar", "Rui Tavares", "Jorge Kapitango", "Técnico — Assistência AC", "Entrega — Encomenda", "Sara Lopes", "Hélder Costa", "Fernanda Neto"];
+  const people = ["Carla Mendes", "Nelson Pinto", "Edna Gaspar", "Rui Tavares", "Jorge Kapitango", "Técnico de manutenção", "Entrega — Encomenda", "Sara Lopes", "Hélder Costa", "Fernanda Neto"];
   const cats: AccessLog["category"][] = ["morador", "morador", "morador", "morador", "visitante", "prestador", "entrega", "morador", "morador", "morador"];
-  const blocks = ["A", "B", "C"];
   return Array.from({ length: 36 }, (_, i) => {
     const pi = Math.floor(r() * people.length);
-    const day = 18 - Math.floor(i / 9);
+    const day = 19 - Math.floor(i / 9);
     const hour = 23 - ((i * 2) % 16);
+    const pl = pick(PROVISIONAL_LAYOUT, r);
     return {
       id: `acc_${i}`,
       at: `2026-10-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(Math.floor(r() * 59)).padStart(2, "0")}:00`,
       type: r() < 0.55 ? "entrada" : "saida",
       person: people[pi],
       category: cats[pi],
-      apartmentId: aptId(pick(blocks, r), `${1 + Math.floor(r() * 6)}0${1 + Math.floor(r() * 4)}`),
+      apartmentId: aptId(pick(BLOCKS, r), pick(pl.numbers, r)),
       gate: "Entrada principal",
     } satisfies AccessLog;
   }).sort((a, b) => b.at.localeCompare(a.at));
 })();
 
 export const seedOccurrences: Occurrence[] = [
-  { id: "oc_1", title: "Lâmpada fundida no hall do Bloco B", description: "Iluminação do hall do 3.º piso sem funcionar.", category: "Manutenção", priority: "media", status: "aberta", location: "Bloco B — 3.º piso", createdAt: "2026-10-18T07:45:00", reportedBy: "Carla Mendes", apartmentId: aptId("B", "302") },
-  { id: "oc_2", title: "Ruído excessivo após as 22h", description: "Música alta reportada por vizinhos.", category: "Ruído", priority: "baixa", status: "resolvida", location: "Bloco A — 5.º piso", createdAt: "2026-10-17T22:30:00", reportedBy: "Turno da noite", apartmentId: aptId("A", "502") },
-  { id: "oc_3", title: "Viatura estacionada em local indevido", description: "Viatura a obstruir a saída de emergência.", category: "Estacionamento", priority: "alta", status: "em_curso", location: "Entrada principal", createdAt: "2026-10-17T14:10:00", reportedBy: "Domingos Kiala" },
-  { id: "oc_4", title: "Fuga de água junto à piscina", description: "Pequena fuga junto ao sistema de filtragem.", category: "Manutenção", priority: "alta", status: "em_curso", location: "Zona da piscina", createdAt: "2026-10-16T10:00:00", reportedBy: "Paulo Sebastião" },
-  { id: "oc_5", title: "Tentativa de acesso sem identificação", description: "Indivíduo recusou identificar-se na entrada.", category: "Segurança", priority: "alta", status: "resolvida", location: "Entrada principal", createdAt: "2026-10-15T21:10:00", reportedBy: "Turno da noite" },
-  { id: "oc_6", title: "Recolha de resíduos atrasada", description: "Contentores cheios no Bloco C.", category: "Limpeza", priority: "media", status: "aberta", location: "Bloco C — exterior", createdAt: "2026-10-15T09:30:00", reportedBy: "Domingos Kiala" },
-  { id: "oc_7", title: "Elevador com ruído anormal", description: "Elevador do Bloco A emite ruído ao parar.", category: "Manutenção", priority: "media", status: "resolvida", location: "Bloco A — elevador", createdAt: "2026-10-12T12:00:00", reportedBy: "Paulo Sebastião" },
+  { id: "oc_1", title: "Lâmpada fundida no hall do Bloco 06", description: "Iluminação do hall do 2.º piso sem funcionar.", category: "Manutenção", priority: "media", status: "aberta", location: "Bloco 06 — 2.º piso", createdAt: "2026-10-18T07:45:00", reportedBy: "Carla Mendes", apartmentId: DEMO_RESIDENT_APT },
+  { id: "oc_2", title: "Ruído excessivo após as 22h", description: "Música alta reportada por vizinhos.", category: "Ruído", priority: "baixa", status: "resolvida", location: "Bloco 01 — 5.º piso", createdAt: "2026-10-17T22:30:00", reportedBy: "Portaria", apartmentId: aptId("01", "502") },
+  { id: "oc_3", title: "Viatura estacionada em local indevido", description: "Viatura a obstruir a saída de emergência.", category: "Estacionamento", priority: "alta", status: "em_curso", location: "Entrada principal", createdAt: "2026-10-17T14:10:00", reportedBy: "Portaria" },
+  { id: "oc_4", title: "Fuga de água junto à piscina", description: "Pequena fuga junto ao sistema de filtragem.", category: "Manutenção", priority: "alta", status: "em_curso", location: "Zona da piscina", createdAt: "2026-10-16T10:00:00", reportedBy: ADMIN_NAME },
+  { id: "oc_5", title: "Tentativa de acesso sem identificação", description: "Indivíduo recusou identificar-se na entrada.", category: "Segurança", priority: "alta", status: "resolvida", location: "Entrada principal", createdAt: "2026-10-15T21:10:00", reportedBy: "Portaria" },
+  { id: "oc_6", title: "Recolha de resíduos atrasada", description: "Contentores cheios junto ao Bloco 09.", category: "Limpeza", priority: "media", status: "aberta", location: "Bloco 09 — exterior", createdAt: "2026-10-15T09:30:00", reportedBy: "Portaria" },
 ];
 
+const ALL_RECIPIENTS = { mode: "todos" as const, blocks: {}, listInBody: false };
+
+/** Circulares de EXEMPLO (conteúdo de demonstração). */
 export const seedCirculars: Circular[] = [
-  { id: "cir_1", number: "012/2026", subject: "Plano de manutenção preventiva — 4.º trimestre", body: "Exmos. Senhores Condóminos e Moradores,\n\nVimos por este meio informar que, durante o 4.º trimestre de 2026, será executado o plano de manutenção preventiva das áreas comuns, incluindo piscinas, iluminação exterior e espaços verdes.\n\nAs intervenções serão comunicadas com antecedência e procurarão minimizar o impacto no dia-a-dia dos moradores.\n\nAgradecemos desde já a vossa compreensão e colaboração.\n\nCom os melhores cumprimentos,", date: "2026-10-10", status: "publicada", audience: "Todos os moradores", author: "Paulo Sebastião", authorTitle: "Administrador do Condomínio", publishedAt: "2026-10-10T10:00:00", updatedAt: "2026-10-10T10:00:00" },
-  { id: "cir_2", number: "011/2026", subject: "Regras de utilização das piscinas", body: "Exmos. Senhores Moradores,\n\nRecordamos as regras de utilização das piscinas: horário de funcionamento, obrigatoriedade de duche prévio e acompanhamento de menores por um adulto responsável.\n\nO cumprimento destas regras garante a segurança e o bem-estar de todos.\n\nCom os melhores cumprimentos,", date: "2026-09-28", status: "publicada", audience: "Todos os moradores", author: "Helena Cardoso", authorTitle: "Administradora Geral", publishedAt: "2026-09-28T09:00:00", updatedAt: "2026-09-28T09:00:00" },
-  { id: "cir_3", number: "010/2026", subject: "Actualização dos dados de contacto dos moradores", body: "Exmos. Senhores Moradores,\n\nSolicitamos a actualização dos dados de contacto na Área de Moradores, de modo a garantir que todas as comunicações chegam aos destinatários.\n\nCom os melhores cumprimentos,", date: "2026-09-12", status: "publicada", audience: "Todos os moradores", author: "Paulo Sebastião", authorTitle: "Administrador do Condomínio", publishedAt: "2026-09-12T11:30:00", updatedAt: "2026-09-12T11:30:00" },
-  { id: "cir_4", number: "013/2026", subject: "Assembleia Geral ordinária — convocatória", body: "Exmos. Senhores Condóminos,\n\nNos termos do regulamento do condomínio, convocam-se V. Exas. para a Assembleia Geral ordinária, com a seguinte ordem de trabalhos:\n\n1. Apreciação do relatório de contas;\n2. Aprovação do orçamento para 2027;\n3. Outros assuntos de interesse geral.\n\nCom os melhores cumprimentos,", date: "2026-10-17", status: "rascunho", audience: "Proprietários", author: "Helena Cardoso", authorTitle: "Administradora Geral", updatedAt: "2026-10-17T16:00:00" },
-  { id: "cir_5", number: "008/2026", subject: "Horário de funcionamento da administração", body: "Exmos. Senhores Moradores,\n\nInformamos o horário de atendimento da administração do condomínio.\n\nCom os melhores cumprimentos,", date: "2026-07-02", status: "arquivada", audience: "Todos os moradores", author: "Paulo Sebastião", authorTitle: "Administrador do Condomínio", publishedAt: "2026-07-02T09:00:00", updatedAt: "2026-08-30T09:00:00" },
+  {
+    id: "cir_1",
+    sequence: 1,
+    year: 2026,
+    number: "01/ADMLR/2026",
+    subject: "Plano de Manutenção Preventiva das Áreas Comuns",
+    body: "Informa-se a todos os condóminos que, durante o 1.º trimestre de 2026, será executado o plano de manutenção preventiva das áreas comuns, incluindo piscinas, iluminação exterior e espaços verdes.\n\nAs intervenções serão comunicadas com antecedência, procurando minimizar o impacto no dia-a-dia dos moradores.\n\n(Circular de exemplo — conteúdo de demonstração.)",
+    date: "2026-01-12",
+    status: "arquivada",
+    recipients: ALL_RECIPIENTS,
+    author: ADMIN_NAME,
+    authorTitle: ADMIN_TITLE,
+    publishedAt: "2026-01-12T10:00:00",
+    updatedAt: "2026-04-01T10:00:00",
+  },
+  {
+    id: "cir_2",
+    sequence: 2,
+    year: 2026,
+    number: "02/ADMLR/2026",
+    subject: "Regras de Utilização das Piscinas",
+    body: "Recordam-se as regras de utilização das piscinas: respeito pelo horário de funcionamento, duche prévio obrigatório e acompanhamento de menores por um adulto responsável.\n\nO cumprimento destas regras garante a segurança e o bem-estar de todos.\n\n(Circular de exemplo — conteúdo de demonstração.)",
+    date: "2026-09-28",
+    status: "publicada",
+    recipients: ALL_RECIPIENTS,
+    author: ADMIN_NAME,
+    authorTitle: ADMIN_TITLE,
+    publishedAt: "2026-09-28T09:00:00",
+    updatedAt: "2026-09-28T09:00:00",
+  },
+  {
+    id: "cir_3",
+    sequence: 3,
+    year: 2026,
+    number: "03/ADMLR/2026",
+    subject: "Pagamento da Quota do 4.º Trimestre de 2026",
+    body: "Recorda-se a todos os condóminos que o pagamento da quota do condomínio referente ao 4.º trimestre de 2026 (Outubro a Dezembro) deverá ser efectuado dentro do prazo estabelecido.\n\nOs comprovativos podem ser enviados através da Área de Moradores do portal.\n\n(Circular de exemplo — conteúdo de demonstração.)",
+    date: "2026-10-01",
+    status: "publicada",
+    recipients: ALL_RECIPIENTS,
+    author: ADMIN_NAME,
+    authorTitle: ADMIN_TITLE,
+    publishedAt: "2026-10-01T09:00:00",
+    updatedAt: "2026-10-01T09:00:00",
+  },
+  {
+    id: "cir_4",
+    sequence: 4,
+    year: 2026,
+    number: "04/ADMLR/2026",
+    subject: "Intervenção na Rede de Água",
+    body: "Informa-se que será efectuada uma intervenção técnica na rede de abastecimento de água, com interrupção temporária do fornecimento aos apartamentos abaixo mencionados:",
+    closing: "Agradecemos a compreensão de todos.\n\n(Rascunho de exemplo — conteúdo de demonstração.)",
+    date: "2026-10-19",
+    status: "rascunho",
+    recipients: { mode: "seleccao", blocks: { "03": ["101", "102", "201"], "06": [] }, listInBody: true },
+    author: ADMIN_NAME,
+    authorTitle: ADMIN_TITLE,
+    updatedAt: "2026-10-19T08:00:00",
+  },
 ];
 
 export const seedNotices: InternalNotice[] = [
-  { id: "not_1", title: "Manutenção preventiva das piscinas", body: "As piscinas estarão encerradas para limpeza e tratamento da água. (Comunicado de demonstração)", category: "Manutenção", date: "2026-10-14", visibility: "publico", author: "Administração", pinned: true },
-  { id: "not_2", title: "Convocatória para Assembleia Geral", body: "A ordem de trabalhos completa está disponível na secção de documentos. (Comunicado de demonstração)", category: "Assembleia", date: "2026-10-06", visibility: "publico", author: "Administração" },
-  { id: "not_3", title: "Actualização do registo de visitantes", body: "Todos os visitantes deverão ser identificados na entrada principal. (Comunicado de demonstração)", category: "Segurança", date: "2026-09-25", visibility: "publico", author: "Administração" },
-  { id: "not_4", title: "Corte programado de água — Bloco C", body: "Interrupção do abastecimento entre as 09h e as 12h para intervenção técnica. (Comunicado de demonstração)", category: "Manutenção", date: "2026-10-16", visibility: "moradores", author: "Administração" },
+  { id: "not_1", title: "Manutenção preventiva das piscinas", body: "As piscinas estarão encerradas para limpeza e tratamento da água. (Comunicado de demonstração)", category: "Manutenção", date: "2026-10-14", visibility: "publico", status: "publicado", author: ADMIN_NAME, pinned: true, publishedAt: "2026-10-14T09:00:00", updatedAt: "2026-10-14T09:00:00" },
+  { id: "not_2", title: "Convocatória para Assembleia Geral", body: "A ordem de trabalhos completa está disponível na secção de documentos. (Comunicado de demonstração)", category: "Assembleia", date: "2026-10-06", visibility: "publico", status: "publicado", author: ADMIN_NAME, publishedAt: "2026-10-06T09:00:00", updatedAt: "2026-10-06T09:00:00" },
+  { id: "not_3", title: "Registo prévio de visitas", body: "As visitas devem ser registadas pelos moradores na Área de Moradores; a Portaria confirma a entrada com base nessa autorização. (Comunicado de demonstração)", category: "Segurança", date: "2026-09-25", visibility: "moradores", status: "publicado", author: ADMIN_NAME, publishedAt: "2026-09-25T09:00:00", updatedAt: "2026-09-25T09:00:00" },
+  { id: "not_4", title: "Corte programado de água — Bloco 03", body: "Interrupção do abastecimento entre as 09h e as 12h para intervenção técnica. (Comunicado de demonstração)", category: "Manutenção", date: "2026-08-16", visibility: "moradores", status: "retirado", author: ADMIN_NAME, publishedAt: "2026-08-16T09:00:00", withdrawnAt: "2026-08-20T09:00:00", updatedAt: "2026-08-20T09:00:00" },
 ];
 
 export const seedDocuments: CondoDocument[] = [
-  { id: "doc_1", title: "Regulamento Interno do Condomínio", description: "Regras de convivência, utilização das áreas comuns e deveres dos moradores.", category: "regulamento", fileType: "PDF", size: 1_240_000, updatedAt: "2026-03-15", visibility: "moradores", uploadedBy: "Helena Cardoso" },
-  { id: "doc_2", title: "Regulamento de Utilização das Piscinas", description: "Horários, normas de segurança e higiene.", category: "regulamento", fileType: "PDF", size: 420_000, updatedAt: "2026-09-28", visibility: "moradores", uploadedBy: "Paulo Sebastião" },
-  { id: "doc_3", title: "Acta da Assembleia Geral — Março 2026", description: "Deliberações da assembleia ordinária.", category: "acta", fileType: "PDF", size: 860_000, updatedAt: "2026-03-30", visibility: "moradores", uploadedBy: "Helena Cardoso" },
-  { id: "doc_4", title: "Acta da Assembleia Extraordinária — Julho 2026", description: "Aprovação de obras nas áreas comuns.", category: "acta", fileType: "PDF", size: 640_000, updatedAt: "2026-07-20", visibility: "moradores", uploadedBy: "Helena Cardoso" },
-  { id: "doc_5", title: "Circular 012/2026 — Manutenção preventiva", description: "Plano de manutenção do 4.º trimestre.", category: "circular", fileType: "PDF", size: 210_000, updatedAt: "2026-10-10", visibility: "moradores", uploadedBy: "Paulo Sebastião" },
-  { id: "doc_6", title: "Circular 011/2026 — Regras das piscinas", description: "Normas de utilização das piscinas.", category: "circular", fileType: "PDF", size: 190_000, updatedAt: "2026-09-28", visibility: "moradores", uploadedBy: "Helena Cardoso" },
-  { id: "doc_7", title: "Comunicado — Corte programado de água", description: "Intervenção técnica no Bloco C.", category: "comunicado", fileType: "PDF", size: 120_000, updatedAt: "2026-10-16", visibility: "moradores", uploadedBy: "Paulo Sebastião" },
-  { id: "doc_8", title: "Apresentação institucional do Residencial Laguna", description: "Documento de apresentação do condomínio.", category: "institucional", fileType: "PDF", size: 3_400_000, updatedAt: "2026-01-10", visibility: "publico", uploadedBy: "Helena Cardoso" },
-  { id: "doc_9", title: "Orçamento anual 2026", description: "Orçamento aprovado em assembleia (demo).", category: "institucional", fileType: "XLSX", size: 96_000, updatedAt: "2026-03-30", visibility: "administracao", uploadedBy: "Marta Neto" },
-  { id: "doc_10", title: "Contrato de manutenção de elevadores", description: "Contrato com prestador de serviços (demo).", category: "institucional", fileType: "DOCX", size: 310_000, updatedAt: "2026-02-01", visibility: "administracao", uploadedBy: "Helena Cardoso" },
+  { id: "doc_1", title: "Regulamento Interno do Condomínio", description: "Regras de convivência, utilização das áreas comuns e deveres dos moradores.", category: "regulamento", fileType: "PDF", size: 1_240_000, updatedAt: "2026-03-15", visibility: "moradores", uploadedBy: ADMIN_NAME },
+  { id: "doc_2", title: "Regulamento de Utilização das Piscinas", description: "Horários, normas de segurança e higiene.", category: "regulamento", fileType: "PDF", size: 420_000, updatedAt: "2026-09-28", visibility: "moradores", uploadedBy: ADMIN_NAME },
+  { id: "doc_3", title: "Acta da Assembleia Geral — Março 2026", description: "Deliberações da assembleia ordinária (demo).", category: "acta", fileType: "PDF", size: 860_000, updatedAt: "2026-03-30", visibility: "moradores", uploadedBy: ADMIN_NAME },
+  { id: "doc_5", title: "Circular 03/ADMLR/2026 — Quota do 4.º trimestre", description: "Pagamento da quota trimestral (exemplo).", category: "circular", fileType: "PDF", size: 210_000, updatedAt: "2026-10-01", visibility: "moradores", uploadedBy: ADMIN_NAME },
+  { id: "doc_6", title: "Circular 02/ADMLR/2026 — Regras das piscinas", description: "Normas de utilização das piscinas (exemplo).", category: "circular", fileType: "PDF", size: 190_000, updatedAt: "2026-09-28", visibility: "moradores", uploadedBy: ADMIN_NAME },
+  { id: "doc_8", title: "Apresentação institucional do Residencial Laguna", description: "Documento de apresentação do condomínio.", category: "institucional", fileType: "PDF", size: 3_400_000, updatedAt: "2026-01-10", visibility: "publico", uploadedBy: ADMIN_NAME },
+  { id: "doc_9", title: "Orçamento anual 2026", description: "Orçamento aprovado em assembleia (demo).", category: "institucional", fileType: "XLSX", size: 96_000, updatedAt: "2026-03-30", visibility: "administracao", uploadedBy: "Gestão Financeira" },
 ];
 
 export const seedNotifications: AppNotification[] = [
-  { id: "ntf_1", title: "Novo comprovativo submetido", body: "Apartamento A-204 enviou comprovativo da quota de Outubro.", at: "2026-10-18T09:20:00", read: false, roles: ["admin_geral", "financeiro", "administrador"], href: "/painel/pagamentos" },
-  { id: "ntf_2", title: "Ocorrência de prioridade alta", body: "Viatura estacionada em local indevido na entrada principal.", at: "2026-10-17T14:12:00", read: false, roles: ["admin_geral", "administrador", "porteiro"], href: "/painel/ocorrencias" },
-  { id: "ntf_3", title: "Circular em rascunho", body: "A circular 013/2026 aguarda publicação.", at: "2026-10-17T16:05:00", read: true, roles: ["admin_geral", "administrador"], href: "/painel/circulares" },
-  { id: "ntf_4", title: "Visitante a aguardar autorização", body: "Rita Mussungo — destino A-103.", at: "2026-10-18T10:30:00", read: false, roles: ["porteiro"], href: "/painel/portaria" },
-  { id: "ntf_5", title: "Quota de Outubro disponível", body: "A quota de Outubro 2026 vence a 25/10/2026.", at: "2026-10-01T08:00:00", read: false, roles: ["morador"], href: "/painel/minhas-quotas" },
-  { id: "ntf_6", title: "Nova circular publicada", body: "Circular 012/2026 — Plano de manutenção preventiva.", at: "2026-10-10T10:00:00", read: true, roles: ["morador"], href: "/painel/circulares" },
-  { id: "ntf_7", title: "Visita registada", body: "Jorge Kapitango deu entrada às 09:15 para o seu apartamento.", at: "2026-10-18T09:15:00", read: false, roles: ["morador"] },
+  { id: "ntf_1", title: "Novo comprovativo submetido", body: "Bloco 03 · 202 enviou comprovativo da quota do 4.º trimestre.", at: "2026-10-19T09:20:00", read: false, roles: ["admin_geral", "financeiro", "administrador"], href: "/painel/pagamentos" },
+  { id: "ntf_2", title: "Ocorrência de prioridade alta", body: "Viatura estacionada em local indevido na entrada principal.", at: "2026-10-17T14:12:00", read: false, roles: ["admin_geral", "administrador"], href: "/painel/ocorrencias" },
+  { id: "ntf_3", title: "Circular em rascunho", body: "A circular 04/ADMLR/2026 aguarda publicação.", at: "2026-10-19T08:05:00", read: true, roles: ["admin_geral", "administrador"], href: "/painel/circulares" },
+  { id: "ntf_4", title: "Visita de grupo autorizada", body: "Aniversário — Bloco 06 · 201, 25/10/2026 (15 convidados).", at: "2026-10-17T19:00:00", read: false, roles: ["porteiro"], href: "/painel/portaria" },
+  { id: "ntf_5", title: "Quota do 4.º trimestre disponível", body: "Quota trimestral de Outubro a Dezembro de 2026.", at: "2026-10-01T08:00:00", read: false, roles: ["morador"], href: "/painel/minhas-quotas" },
+  { id: "ntf_6", title: "Nova circular publicada", body: "Circular 03/ADMLR/2026 — Pagamento da quota do 4.º trimestre.", at: "2026-10-01T09:00:00", read: true, roles: ["morador"], href: "/painel/circulares" },
+  { id: "ntf_7", title: "Entrada confirmada", body: "Jorge Kapitango deu entrada às 09:12.", at: "2026-10-19T09:12:00", read: false, roles: ["morador"], href: "/painel/visitas" },
 ];

@@ -1,13 +1,16 @@
 "use client";
 
-import { Eye, Pencil, Plus, Printer, Send, Archive, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Download, Send, Archive, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Circular, CircularStatus } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
-import { useSession } from "@/hooks/use-session";
+import { useCurrentResident } from "@/hooks/use-session";
+import { can } from "@/config/permissions";
+import { circularTargets, recipientSummary } from "@/lib/circular";
+import { downloadCircularPdf } from "@/lib/circular-pdf";
 import { formatDate, includesText } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -23,11 +26,11 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function CircularesPage() {
   const router = useRouter();
-  const session = useSession();
+  const { session, apartment } = useCurrentResident();
   const circulars = useDemoStore((s) => s.circulars);
   const saveCircular = useDemoStore((s) => s.saveCircular);
   const deleteCircular = useDemoStore((s) => s.deleteCircular);
-  const isStaff = session?.role === "admin_geral" || session?.role === "administrador";
+  const isStaff = can(session?.role, "circulars.issue");
 
   const [tab, setTab] = useState<"todas" | CircularStatus>(isStaff ? "todas" : "publicada");
   const [q, setQ] = useState("");
@@ -35,13 +38,14 @@ export default function CircularesPage() {
   const [to, setTo] = useState("");
   const [deleting, setDeleting] = useState<Circular | null>(null);
 
-  const visible = isStaff ? circulars : circulars.filter((c) => c.status === "publicada");
+  // o morador vê apenas as circulares publicadas destinadas à sua fracção
+  const visible = isStaff ? circulars : circulars.filter((c) => c.status === "publicada" && circularTargets(c, apartment));
   const rows = useMemo(
     () =>
       visible
         .filter((c) => (tab === "todas" || c.status === tab) && (!from || c.date >= from) && (!to || c.date <= to))
         .filter((c) => includesText([c.subject, c.number, c.body], q))
-        .sort((a, b) => b.date.localeCompare(a.date)),
+        .sort((a, b) => b.year - a.year || b.sequence - a.sequence),
     [visible, tab, from, to, q],
   );
 
@@ -55,11 +59,11 @@ export default function CircularesPage() {
       <PageHeader
         eyebrow="Comunicação"
         title="Circulares"
-        description={isStaff ? "Criação, edição, pré-visualização e publicação de circulares institucionais." : "Circulares publicadas pela administração."}
+        description={isStaff ? "Emissão de circulares no modelo oficial (N.º/ADMLR/ano), pré-visualização, PDF A4, publicação e histórico." : "Circulares publicadas pela Administração para a sua fracção."}
         actions={
           isStaff && (
             <Link href="/painel/circulares/editor" className={buttonClass("primary")}>
-              <Plus className="h-4 w-4" /> Nova circular
+              <Plus className="h-4 w-4" /> Emitir circular
             </Link>
           )
         }
@@ -98,7 +102,7 @@ export default function CircularesPage() {
             { key: "number", header: "N.º", cell: (c) => <span className="font-mono text-xs font-semibold text-navy-900">{c.number}</span> },
             { key: "subject", header: "Assunto", primary: true, cell: (c) => <span className="font-medium text-navy-900">{c.subject}</span> },
             { key: "date", header: "Data", cell: (c) => formatDate(c.date) },
-            { key: "audience", header: "Destinatários", cell: (c) => c.audience, hideOnMobile: true },
+            { key: "audience", header: "Destinatários", cell: (c) => recipientSummary(c.recipients), hideOnMobile: true },
             { key: "author", header: "Responsável", cell: (c) => c.author, hideOnMobile: true },
             { key: "status", header: "Estado", cell: (c) => <StatusBadge status={c.status} /> },
             {
@@ -110,8 +114,8 @@ export default function CircularesPage() {
                   <IconBtn label="Pré-visualizar" onClick={() => router.push(`/painel/circulares/ver?id=${c.id}`)}>
                     <Eye className="h-4 w-4" />
                   </IconBtn>
-                  <IconBtn label="Imprimir" onClick={() => router.push(`/painel/circulares/ver?id=${c.id}&print=1`)}>
-                    <Printer className="h-4 w-4" />
+                  <IconBtn label="Descarregar PDF" onClick={() => void downloadCircularPdf(c)}>
+                    <Download className="h-4 w-4" />
                   </IconBtn>
                   {isStaff && (
                     <>

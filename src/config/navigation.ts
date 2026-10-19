@@ -18,9 +18,11 @@ import {
   BarChart3,
   History,
   BookOpenCheck,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/types";
+import { can, type Permission } from "./permissions";
 
 export interface AppNavItem {
   href: string;
@@ -49,6 +51,7 @@ export const appNavigation: AppNavGroup[] = [
     items: [
       { href: "/painel/meu-apartamento", label: "Meu Apartamento", icon: Home, roles: ["morador"] },
       { href: "/painel/minhas-quotas", label: "Minhas Quotas", icon: Wallet, roles: ["morador"] },
+      { href: "/painel/visitas", label: "Visitas", icon: UserPlus, roles: ["morador"] },
       { href: "/painel/meus-pagamentos", label: "Pagamentos", icon: Receipt, roles: ["morador"] },
       { href: "/painel/comprovativos", label: "Comprovativos", icon: BookOpenCheck, roles: ["morador"] },
     ],
@@ -56,7 +59,7 @@ export const appNavigation: AppNavGroup[] = [
   {
     label: "Gestão",
     items: [
-      { href: "/painel/apartamentos", label: "Apartamentos", icon: Building2, roles: STAFF },
+      { href: "/painel/apartamentos", label: "Blocos e apartamentos", icon: Building2, roles: STAFF },
       { href: "/painel/moradores", label: "Moradores", icon: Users, roles: STAFF },
     ],
   },
@@ -65,8 +68,8 @@ export const appNavigation: AppNavGroup[] = [
     items: [
       { href: "/painel/financeiro", label: "Visão financeira", icon: BarChart3, roles: ["admin_geral", "administrador"] },
       { href: "/painel/pagamentos", label: "Pagamentos", icon: Banknote, roles: ["admin_geral", "administrador", "financeiro"], labelFor: { financeiro: "Aprovação de pagamentos" } },
-      { href: "/painel/quotas", label: "Quotas", icon: Wallet, roles: ["admin_geral", "financeiro"] },
-      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: ["admin_geral", "financeiro"] },
+      { href: "/painel/quotas", label: "Quotas trimestrais", icon: Wallet, roles: ["admin_geral", "administrador", "financeiro"] },
+      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: ["admin_geral", "administrador", "financeiro"] },
     ],
   },
   {
@@ -80,8 +83,9 @@ export const appNavigation: AppNavGroup[] = [
   {
     label: "Portaria",
     items: [
-      { href: "/painel/portaria", label: "Portaria", icon: DoorOpen, roles: ["admin_geral", "administrador", "porteiro"], labelFor: { porteiro: "Visitantes" } },
-      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: ["admin_geral", "administrador", "porteiro"] },
+      { href: "/painel/portaria", label: "Visitas autorizadas", icon: DoorOpen, roles: ["admin_geral", "administrador", "porteiro"], labelFor: { porteiro: "Visitantes autorizados" } },
+      // Ocorrências: removido do perfil Portaria
+      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: ["admin_geral", "administrador"] },
       { href: "/painel/acessos", label: "Histórico de acessos", icon: History, roles: ["admin_geral", "porteiro"] },
     ],
   },
@@ -107,8 +111,13 @@ export function navForRole(role: Role): AppNavGroup[] {
     .filter((g) => g.items.length > 0);
 }
 
+/** Rotas internas (fora do menu) que exigem uma permissão de operação. */
+const ROUTE_PERMISSIONS: { prefix: string; permission: Permission }[] = [{ prefix: "/painel/circulares/editor", permission: "circulars.issue" }];
+
 /** Verifica se o perfil pode aceder a um caminho do painel. */
 export function canAccess(role: Role, pathname: string) {
+  const rule = ROUTE_PERMISSIONS.find((r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/"));
+  if (rule && !can(role, rule.permission)) return false;
   const items = appNavigation.flatMap((g) => g.items);
   const match = items
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))

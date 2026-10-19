@@ -19,3 +19,18 @@ export const useAuthStore = create<AuthState>()(
     { name: "laguna-demo-session", storage: createJSONStorage(() => localStorage) },
   ),
 );
+
+/**
+ * APENAS DEMONSTRAÇÃO: executa uma acção como outro perfil (ex.: simular a validação
+ * do Administrador a partir da conta do morador). Não existirá na versão com backend.
+ */
+export function withDemoRole<T>(role: Session["role"], fn: () => T): T {
+  const original = useAuthStore.getState().session;
+  if (!original) return fn();
+  useAuthStore.setState({ session: { ...original, role } });
+  try {
+    return fn();
+  } finally {
+    useAuthStore.setState({ session: original });
+  }
+}
