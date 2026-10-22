@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatKzCompact } from "@/lib/utils";
 import { statusLabel } from "@/components/ui/status-badge";
 import { axisProps, CHART_COLORS, ChartTooltip, gridProps, Legend, STATUS_COLORS } from "./chart-kit";
@@ -63,12 +63,14 @@ export function Donut({
   centerLabel,
   centerValue,
   useStatusColors,
+  valueFormat,
 }: {
   data: { key: string; label?: string; value: number }[];
   height?: number;
   centerLabel?: string;
   centerValue?: string;
   useStatusColors?: boolean;
+  valueFormat?: (v: number) => string;
 }) {
   const color = (k: string, i: number) => (useStatusColors ? STATUS_COLORS[k] ?? CHART_COLORS[i] : CHART_COLORS[i % CHART_COLORS.length]);
   const items = data.filter((d) => d.value > 0);
@@ -99,7 +101,7 @@ export function Donut({
               <span className="h-2.5 w-2.5 rounded-sm" style={{ background: color(d.key, i) }} />
               {d.label ?? statusLabel(d.key)}
             </span>
-            <span className="font-semibold text-navy-900 tabular-nums">{d.value}</span>
+            <span className="font-semibold text-navy-900 tabular-nums">{valueFormat ? valueFormat(d.value) : d.value}</span>
           </li>
         ))}
       </ul>
@@ -118,6 +120,47 @@ export function HBars({ data, height = 220, currency = false }: { data: { label:
           <YAxis type="category" dataKey="label" {...axisProps} width={96} />
           <Tooltip cursor={{ fill: "rgba(46,90,156,0.06)" }} content={<ChartTooltip currency={currency} />} />
           <Bar dataKey="value" name="Total" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} maxBarSize={22} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Linhas múltiplas (ex.: evolução de receitas e despesas). Um único eixo Y. */
+export function MultiLine({ data, series, xKey = "label", height = 280, currency = true, percent = false }: { data: Record<string, unknown>[]; series: SeriesDef[]; xKey?: string; height?: number; currency?: boolean; percent?: boolean }) {
+  return (
+    <div>
+      <Legend items={series.map((s, i) => ({ label: s.label, color: CHART_COLORS[i] }))} />
+      <div style={{ height }} className="mt-4">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey={xKey} {...axisProps} />
+            <YAxis {...axisProps} width={56} tickFormatter={(v) => (percent ? `${v}%` : currency ? formatKzCompact(v) : String(v))} />
+            <Tooltip cursor={{ stroke: "#b0b7c3", strokeDasharray: "3 3" }} content={<ChartTooltip currency={currency && !percent} />} />
+            {series.map((s, i) => (
+              <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={CHART_COLORS[i]} strokeWidth={2} dot={{ r: 3, strokeWidth: 0, fill: CHART_COLORS[i] }} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/** Barras verticais de uma série, com cor opcional por valor (ex.: taxa de pagamento por bloco). */
+export function SimpleBars({ data, dataKey, label, xKey = "label", height = 240, currency = false, percent = false, colorFor }: { data: Record<string, unknown>[]; dataKey: string; label: string; xKey?: string; height?: number; currency?: boolean; percent?: boolean; colorFor?: (v: number) => string }) {
+  return (
+    <div style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }} barCategoryGap="28%">
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey={xKey} {...axisProps} />
+          <YAxis {...axisProps} width={56} domain={percent ? [0, 100] : undefined} tickFormatter={(v) => (percent ? `${v}%` : currency ? formatKzCompact(v) : String(v))} />
+          <Tooltip cursor={{ fill: "rgba(46,90,156,0.06)" }} content={<ChartTooltip currency={currency} />} />
+          <Bar dataKey={dataKey} name={label} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} maxBarSize={30}>
+            {colorFor && data.map((d, i) => <Cell key={i} fill={colorFor(Number(d[dataKey]))} />)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>

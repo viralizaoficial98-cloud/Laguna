@@ -304,7 +304,7 @@ function NoticeForm({
         </>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <form className="space-y-4" noValidate onSubmit={(e) => e.preventDefault()}>
           <Field label="Título" required error={errors.title?.message}>
             <Input {...register("title")} invalid={!!errors.title} />

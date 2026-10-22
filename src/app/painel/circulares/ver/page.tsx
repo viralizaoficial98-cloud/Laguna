@@ -23,9 +23,10 @@ export default function VerCircularPage() {
   const circular = useDemoStore((s) => s.circulars.find((c) => c.id === params.get("id")));
   const saveCircular = useDemoStore((s) => s.saveCircular);
   const isStaff = can(session?.role, "circulars.issue");
+  const viewAll = can(session?.role, "circulars.view_all");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  if (!circular || (!isStaff && (circular.status !== "publicada" || !circularTargets(circular, apartment)))) {
+  if (!circular || (!isStaff && (circular.status !== "publicada" || (!viewAll && !circularTargets(circular, apartment))))) {
     return (
       <div className="rounded-3xl border border-graphite-100 bg-white">
         <EmptyState

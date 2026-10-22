@@ -16,7 +16,13 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       setSession: (session) => set({ session }),
     }),
-    { name: "laguna-demo-session", storage: createJSONStorage(() => localStorage) },
+    {
+      name: "laguna-demo-session",
+      storage: createJSONStorage(() => localStorage),
+      // v2: novos perfis (José Leiria, Nelson Rodrigues, Manuel Muenho, Portaria) — sessões antigas são terminadas
+      version: 2,
+      migrate: () => ({ session: null }) as unknown as AuthState,
+    },
   ),
 );
 

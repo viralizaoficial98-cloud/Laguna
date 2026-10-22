@@ -82,7 +82,7 @@ export default function QuotasPage() {
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card>
           <CardHeader title="Configuração em vigor" description="Editável pelo Administrador" />
           <CardBody className="space-y-4">

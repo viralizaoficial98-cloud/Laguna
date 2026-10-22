@@ -18,18 +18,30 @@ npm run lint
 npm run build && npm start
 ```
 
-## Login demonstrativo
+## Login demonstrativo (4 perfis)
 
-| Perfil | Email | Palavra-passe |
+| Nome | Email (identificador de demonstração) | Perfil |
 |---|---|---|
-| Administrador Geral | admin@laguna.demo | DemoLaguna2026 |
-| Administrador | administrador@laguna.demo | DemoLaguna2026 |
-| Financeiro | financeiro@laguna.demo | DemoLaguna2026 |
-| Porteiro | porteiro@laguna.demo | DemoLaguna2026 |
-| Morador | morador@laguna.demo | DemoLaguna2026 |
+| José Leiria | jose.leiria@residenciallaguna.ao | Administrador do Condomínio |
+| Nelson Rodrigues | nelson.rodrigues@residenciallaguna.ao | Gestor Operacional |
+| Manuel Muenho | manuel.muenho@residenciallaguna.ao | Morador (Bloco 06 · 201) |
+| Portaria Laguna | portaria@residenciallaguna.ao | Portaria |
 
-Credenciais exclusivas para demonstração — **não utilizar em produção**. A sessão e os dados ficam no
-`localStorage`; o menu de perfil tem a opção **"Repor dados de demonstração"**.
+Palavra-passe de demonstração: `DemoLaguna2026`. Os emails são apenas identificadores de acesso — não se assume a existência
+de caixas de correio reais. Credenciais exclusivas da demo; não utilizar em produção.
+
+### Experiências por perfil
+
+- **José Leiria** — dashboard executivo (16 KPIs com selecção de período), dashboard financeiro (filtros ano/trimestre/bloco,
+  5 gráficos), supervisão operacional (elevadores, ocorrências, serviços, equipas) e relatórios PDF financeiro e operacional.
+- **Nelson Rodrigues** — dashboard operacional (12 KPIs), Elevadores, Ocorrências, Limpeza, Jardinagem, Manutenção
+  (plano, calendário, execução, fiscalização) e relatórios PDF diário/semanal/mensal/manutenção/ocorrências/fiscalização.
+- **Manuel Muenho** — quotas trimestrais, comprovativos (referência opcional), visitas, ocorrências próprias, estado dos elevadores.
+- **Portaria** — visitantes autorizados e confirmação de entradas/saídas.
+
+Os dashboards de José e Nelson usam a **mesma fonte de dados** (`src/hooks/use-operations.ts`, `src/hooks/use-finance.ts`):
+por exemplo, uma avaria registada por Nelson cria a ocorrência e aparece nos alertas de José; a intervenção resolve-a.
+Os custos de manutenção concluída entram nas despesas do dashboard financeiro.
 
 ## Estrutura
 
@@ -68,6 +80,8 @@ public/images/
 - **Circulares:** modelo oficial (logótipo, "Administração", "CIRCULAR N.º 05/ADMLR/2026", assunto centrado, lista por bloco,
   "Luanda, aos …", "O Administrador / José Leiria", espaço para assinatura e carimbo). Numeração sequencial anual sem duplicações,
   destinatários por bloco/apartamento, PDF A4 gerado no browser (`src/lib/circular-pdf.ts`). Não reproduz assinaturas nem carimbos.
+- **Operações (demo):** o inventário de elevadores (1 por bloco), equipas, actividades e despesas são fictícios e
+  configuráveis — `src/data/operations.ts`.
 - **Permissões por operação:** `src/config/permissions.ts`. As acções do estado (`src/store/demo-store.ts`) verificam o perfil e lançam
   `PermissionError`; as rotas são protegidas em `src/config/navigation.ts`.
 

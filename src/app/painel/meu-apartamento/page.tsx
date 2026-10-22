@@ -19,7 +19,7 @@ export default function MeuApartamentoPage() {
   return (
     <>
       <PageHeader eyebrow="Minha área" title="Meu apartamento" description="Dados do apartamento, agregado familiar e conta corrente." actions={<DemoDataNote />} />
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="overflow-hidden xl:col-span-2">
           <div className="relative h-48 sm:h-56">
             <Image src="/images/laguna/fachadas/edificio-residencial.webp" alt="Edifício residencial do Residencial Laguna" fill sizes="(min-width:1280px) 66vw, 100vw" className="object-cover" />

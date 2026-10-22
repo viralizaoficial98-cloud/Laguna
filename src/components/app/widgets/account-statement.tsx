@@ -35,7 +35,7 @@ export function AccountStatement({ apartmentId }: { apartmentId: string }) {
       .forEach((q) => list.push({ id: q.id, date: q.dueDate, description: `Quota do ${formatQuarter(q.period)}`, debit: q.amount, credit: 0, status: q.status }));
     payments
       .filter((p) => p.apartmentId === apartmentId && p.status === "aprovado")
-      .forEach((p) => list.push({ id: p.id, date: p.paidAt.slice(0, 10), description: `Pagamento ${p.reference}`, debit: 0, credit: p.amount, status: "aprovado" }));
+      .forEach((p) => list.push({ id: p.id, date: p.paidAt.slice(0, 10), description: p.reference ? `Pagamento ${p.reference}` : "Pagamento (sem referência)", debit: 0, credit: p.amount, status: "aprovado" }));
     list.sort((a, b) => a.date.localeCompare(b.date) || b.debit - a.debit);
     return { movements: list, debit: list.reduce((a, m) => a + m.debit, 0), credit: list.reduce((a, m) => a + m.credit, 0) };
   }, [quotas, payments, apartmentId]);

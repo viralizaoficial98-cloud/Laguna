@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Session } from "@/types";
 import { navForRole } from "@/config/navigation";
+import { can } from "@/config/permissions";
 import { useDemoStore } from "@/store/demo-store";
 import { roleLabels } from "@/data/users";
 import { cn, formatDateTime, includesText } from "@/lib/utils";
@@ -56,7 +57,7 @@ function GlobalSearch({ session }: { session: Session }) {
   const ref = useClickOutside(() => setOpen(false));
   const apartments = useDemoStore((s) => s.apartments);
   const residents = useDemoStore((s) => s.residents);
-  const staff = session.role === "admin_geral" || session.role === "administrador";
+  const staff = can(session.role, "residents.view");
 
   const results = useMemo(() => {
     if (!q.trim()) return [];

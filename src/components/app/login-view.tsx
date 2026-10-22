@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { DemoBadge } from "@/components/ui/demo-badge";
 import { Logo } from "@/components/site/logo";
+import { Avatar } from "@/components/ui/avatar";
 import { AuthError, login } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth-store";
 import { demoUsers, roleLabels, DEMO_PASSWORD } from "@/data/users";
@@ -91,7 +92,7 @@ export function LoginView() {
               <Field label="Email" error={errors.email?.message} htmlFor="email">
                 <div className="relative">
                   <Mail className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-graphite-400" />
-                  <Input id="email" type="email" autoComplete="username" placeholder="nome@exemplo.ao" className="h-12 pl-10" invalid={!!errors.email} {...register("email")} />
+                  <Input id="email" type="email" autoComplete="username" placeholder="nome@residenciallaguna.ao" className="h-12 pl-10" invalid={!!errors.email} {...register("email")} />
                 </div>
               </Field>
               <Field label="Palavra-passe" error={errors.password?.message} htmlFor="password">
@@ -123,23 +124,26 @@ export function LoginView() {
 
             <div className="mt-10 rounded-2xl border border-gold-200/70 bg-gold-50/50 p-4">
               <p className="flex items-center gap-2 text-xs font-semibold text-gold-900">
-                <ShieldCheck className="h-4 w-4" /> Perfis de teste — clique para preencher
+                <ShieldCheck className="h-4 w-4" /> Acesso de demonstração — clique para preencher
               </p>
-              <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {demoUsers.map((u) => (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => fill(u.email)}
-                    className={cn("rounded-xl border border-transparent bg-white px-3 py-2 text-left transition hover:border-gold-300 hover:shadow-soft")}
+                    className={cn("flex items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 text-left transition hover:border-gold-300 hover:shadow-soft")}
                   >
-                    <span className="block text-xs font-semibold text-navy-900">{roleLabels[u.role]}</span>
-                    <span className="block truncate text-[11px] text-graphite-500">{u.email}</span>
+                    <Avatar name={u.name} size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-navy-900">{u.name}</span>
+                      <span className="block truncate text-[11px] text-graphite-500">{roleLabels[u.role]}</span>
+                    </span>
                   </button>
                 ))}
               </div>
               <p className="mt-3 text-[11px] leading-relaxed text-gold-900/80">
-                Palavra-passe: <code className="rounded bg-white px-1.5 py-0.5 font-mono">{DEMO_PASSWORD}</code>. Credenciais exclusivas para demonstração — não utilizar em produção.
+                Palavra-passe de demonstração: <code className="rounded bg-white px-1.5 py-0.5 font-mono">{DEMO_PASSWORD}</code>. Os emails são apenas identificadores de acesso da demo — não utilizar em produção.
               </p>
             </div>
           </motion.div>

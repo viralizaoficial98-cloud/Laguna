@@ -157,7 +157,7 @@ export default function MinhasQuotasPage() {
         )}
       </Card>
       <PayQuotaModal quota={paying} residentId={resident?.id} onClose={() => setPaying(null)} />
-      <Modal open={!!proof} onClose={() => setProof(null)} size="lg" title={proof?.proof?.name ?? ""} description={proof ? `Referência ${proof.reference}` : ""}>
+      <Modal open={!!proof} onClose={() => setProof(null)} size="lg" title={proof?.proof?.name ?? ""} description={proof ? `Referência ${proof.reference || "não indicada"}` : ""}>
         {proof && <ProofPreview payment={proof} />}
       </Modal>
     </>

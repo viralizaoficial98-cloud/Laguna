@@ -42,7 +42,7 @@ export function PorteiroDashboard({ session }: { session: Session }) {
         <StatCard index={3} label="Eventos de grupo próximos" value={upcomingGroups.length} icon={PartyPopper} tone="gold" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader title="Visitas autorizadas para hoje" description="Registadas pelos moradores" action={<Link href="/painel/portaria" className="text-xs font-medium text-navy-700">Ver todas</Link>} />
           {todays.length === 0 ? (

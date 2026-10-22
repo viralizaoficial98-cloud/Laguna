@@ -31,7 +31,7 @@ export default function MeusPagamentosPage() {
           emptyTitle="Ainda não registou pagamentos"
           columns={[
             { key: "period", header: "Quota trimestral", primary: true, cell: (p) => <span className="font-medium text-navy-900">{period(p) ? formatQuarter(period(p)!) : "—"}</span> },
-            { key: "ref", header: "Referência", cell: (p) => <span className="font-mono text-xs">{p.reference}</span> },
+            { key: "ref", header: "Referência", cell: (p) => <span className="font-mono text-xs">{p.reference || "—"}</span> },
             { key: "method", header: "Método", cell: (p) => METHOD_LABELS[p.method], hideOnMobile: true },
             { key: "paid", header: "Data do pagamento", cell: (p) => formatDate(p.paidAt) },
             { key: "date", header: "Enviado", cell: (p) => formatDate(p.submittedAt), hideOnMobile: true },
@@ -40,7 +40,7 @@ export default function MeusPagamentosPage() {
           ]}
         />
       </Card>
-      <Modal open={!!sel} onClose={() => setSel(null)} size="lg" title="Detalhe do pagamento" description={sel ? `${sel.reference} · ${formatKz(sel.amount)}` : ""}>
+      <Modal open={!!sel} onClose={() => setSel(null)} size="lg" title="Detalhe do pagamento" description={sel ? `${sel.reference || "Sem referência"} · ${formatKz(sel.amount)}` : ""}>
         {sel && (
           <div className="grid gap-6 md:grid-cols-2">
             <ol className="relative space-y-6 border-l border-graphite-200 pl-6">

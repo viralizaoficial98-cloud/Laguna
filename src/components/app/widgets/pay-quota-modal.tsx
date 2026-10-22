@@ -51,10 +51,6 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
   };
 
   const next = () => {
-    if (step === 1 && reference.trim().length < 4) {
-      setError("Indique a referência da transacção (mín. 4 caracteres).");
-      return;
-    }
     if (step === 2 && !proof) {
       setError("Seleccione o comprovativo de pagamento.");
       return;
@@ -133,8 +129,8 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
                   ))}
                 </Select>
               </Field>
-              <Field label="Referência da transacção" required>
-                <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex.: TRF-123456" invalid={!!error} />
+              <Field label="Referência da transacção" hint="Opcional — pode enviar o comprovativo sem referência.">
+                <Input name="reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex.: TRF-123456 (opcional)" />
               </Field>
               <Field label="Data do pagamento" required>
                 <Input type="date" value={paidAt} max="2026-12-31" onChange={(e) => setPaidAt(e.target.value)} />

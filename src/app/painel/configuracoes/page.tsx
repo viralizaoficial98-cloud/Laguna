@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { DemoUser, Role } from "@/types";
 import { siteConfig } from "@/config/site";
 import { appNavigation } from "@/config/navigation";
-import { demoUsers, roleDescriptions, roleLabels } from "@/data/users";
+import { ROLES, demoUsers, roleDescriptions, roleLabels } from "@/data/users";
 import { cn, formatDateTime, uid } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -21,7 +21,6 @@ import { Modal } from "@/components/ui/modal";
 import { DemoBadge } from "@/components/ui/demo-badge";
 
 type Tab = "instituicao" | "utilizadores" | "perfis" | "preferencias" | "notificacoes" | "personalizacao";
-const ROLES: Role[] = ["admin_geral", "administrador", "financeiro", "porteiro", "morador"];
 
 export default function ConfiguracoesPage() {
   const [tab, setTab] = useState<Tab>("instituicao");

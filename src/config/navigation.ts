@@ -19,6 +19,11 @@ import {
   History,
   BookOpenCheck,
   UserPlus,
+  ArrowUpDown,
+  Activity,
+  Sparkles,
+  Trees,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/types";
@@ -38,13 +43,14 @@ export interface AppNavGroup {
   items: AppNavItem[];
 }
 
-const ALL: Role[] = ["admin_geral", "administrador", "financeiro", "porteiro", "morador"];
-const STAFF: Role[] = ["admin_geral", "administrador"];
+const ALL: Role[] = ["administrador", "gestor", "morador", "porteiro"];
+const ADM: Role[] = ["administrador"];
+const OPS: Role[] = ["administrador", "gestor"];
 
 export const appNavigation: AppNavGroup[] = [
   {
     label: "Geral",
-    items: [{ href: "/painel", label: "Dashboard", icon: LayoutDashboard, roles: ALL }],
+    items: [{ href: "/painel", label: "Dashboard", icon: LayoutDashboard, roles: ALL, labelFor: { administrador: "Dashboard executivo", gestor: "Dashboard operacional" } }],
   },
   {
     label: "Minha área",
@@ -54,46 +60,62 @@ export const appNavigation: AppNavGroup[] = [
       { href: "/painel/visitas", label: "Visitas", icon: UserPlus, roles: ["morador"] },
       { href: "/painel/meus-pagamentos", label: "Pagamentos", icon: Receipt, roles: ["morador"] },
       { href: "/painel/comprovativos", label: "Comprovativos", icon: BookOpenCheck, roles: ["morador"] },
+      { href: "/painel/ocorrencias", label: "Minhas ocorrências", icon: ShieldAlert, roles: ["morador"] },
+      { href: "/painel/elevadores", label: "Estado dos elevadores", icon: ArrowUpDown, roles: ["morador"] },
+    ],
+  },
+  {
+    label: "Executivo",
+    items: [
+      { href: "/painel/financeiro", label: "Dashboard financeiro", icon: BarChart3, roles: ADM },
+      { href: "/painel/operacional", label: "Supervisão operacional", icon: Activity, roles: ADM },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { href: "/painel/apartamentos", label: "Blocos e apartamentos", icon: Building2, roles: STAFF },
-      { href: "/painel/moradores", label: "Moradores", icon: Users, roles: STAFF },
+      { href: "/painel/apartamentos", label: "Blocos e apartamentos", icon: Building2, roles: ADM },
+      { href: "/painel/moradores", label: "Moradores", icon: Users, roles: OPS },
     ],
   },
   {
     label: "Financeiro",
     items: [
-      { href: "/painel/financeiro", label: "Visão financeira", icon: BarChart3, roles: ["admin_geral", "administrador"] },
-      { href: "/painel/pagamentos", label: "Pagamentos", icon: Banknote, roles: ["admin_geral", "administrador", "financeiro"], labelFor: { financeiro: "Aprovação de pagamentos" } },
-      { href: "/painel/quotas", label: "Quotas trimestrais", icon: Wallet, roles: ["admin_geral", "administrador", "financeiro"] },
-      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: ["admin_geral", "administrador", "financeiro"] },
+      { href: "/painel/pagamentos", label: "Pagamentos", icon: Banknote, roles: ADM },
+      { href: "/painel/quotas", label: "Quotas trimestrais", icon: Wallet, roles: ADM },
+      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: ADM },
+    ],
+  },
+  {
+    label: "Operações",
+    items: [
+      { href: "/painel/elevadores", label: "Elevadores", icon: ArrowUpDown, roles: OPS },
+      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: OPS },
+      { href: "/painel/limpeza", label: "Limpeza", icon: Sparkles, roles: OPS },
+      { href: "/painel/jardinagem", label: "Jardinagem", icon: Trees, roles: OPS },
+      { href: "/painel/manutencao", label: "Manutenção", icon: Wrench, roles: OPS },
     ],
   },
   {
     label: "Comunicação",
     items: [
-      { href: "/painel/circulares", label: "Circulares", icon: ScrollText, roles: ["admin_geral", "administrador", "morador"] },
-      { href: "/painel/comunicados", label: "Comunicados", icon: Megaphone, roles: ALL },
-      { href: "/painel/documentos", label: "Documentos", icon: FileStack, roles: ["admin_geral", "administrador", "financeiro", "morador"] },
+      { href: "/painel/circulares", label: "Circulares", icon: ScrollText, roles: ["administrador", "gestor", "morador"] },
+      { href: "/painel/comunicados", label: "Comunicados", icon: Megaphone, roles: ["administrador", "gestor", "morador"] },
+      { href: "/painel/documentos", label: "Documentos", icon: FileStack, roles: ["administrador", "gestor", "morador"] },
     ],
   },
   {
     label: "Portaria",
     items: [
-      { href: "/painel/portaria", label: "Visitas autorizadas", icon: DoorOpen, roles: ["admin_geral", "administrador", "porteiro"], labelFor: { porteiro: "Visitantes autorizados" } },
-      // Ocorrências: removido do perfil Portaria
-      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: ["admin_geral", "administrador"] },
-      { href: "/painel/acessos", label: "Histórico de acessos", icon: History, roles: ["admin_geral", "porteiro"] },
+      { href: "/painel/portaria", label: "Visitas autorizadas", icon: DoorOpen, roles: ["administrador", "gestor", "porteiro"], labelFor: { porteiro: "Visitantes autorizados" } },
+      { href: "/painel/acessos", label: "Histórico de acessos", icon: History, roles: ["administrador", "porteiro"] },
     ],
   },
   {
     label: "Administração",
     items: [
-      { href: "/painel/relatorios", label: "Relatórios", icon: FileText, roles: ["admin_geral", "administrador", "financeiro"] },
-      { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ["admin_geral"] },
+      { href: "/painel/relatorios", label: "Relatórios", icon: FileText, roles: OPS },
+      { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ADM },
     ],
   },
   {
@@ -118,9 +140,9 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: Permission }[] = [{ prefi
 export function canAccess(role: Role, pathname: string) {
   const rule = ROUTE_PERMISSIONS.find((r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/"));
   if (rule && !can(role, rule.permission)) return false;
-  const items = appNavigation.flatMap((g) => g.items);
-  const match = items
-    .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-  return match ? match.roles.includes(role) : true;
+  const items = appNavigation.flatMap((g) => g.items).filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
+  if (items.length === 0) return true;
+  const longest = Math.max(...items.map((i) => i.href.length));
+  // a mesma rota pode aparecer em grupos diferentes (ex.: Ocorrências para morador e gestor)
+  return items.filter((i) => i.href.length === longest).some((i) => i.roles.includes(role));
 }

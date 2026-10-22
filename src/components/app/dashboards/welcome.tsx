@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { DEMO_TODAY } from "@/data/management";
-import { formatDate } from "@/lib/utils";
+import { formatDate, todayISO } from "@/lib/utils";
 
 export function greeting() {
   const h = new Date().getHours();
@@ -15,7 +14,7 @@ export function Welcome({ name, subtitle, children, image = "/images/laguna/laze
       <div className="absolute inset-0 bg-gradient-to-r from-navy-950 via-navy-950/90 to-navy-950/40" />
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.25em] text-gold-300 uppercase">{formatDate(DEMO_TODAY, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="text-[11px] font-semibold tracking-[0.25em] text-gold-300 uppercase">{formatDate(todayISO(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
           <h1 className="mt-2 font-display text-4xl sm:text-5xl">
             {greeting()}, <em className="text-gold-300">{name.split(" ")[0]}</em>
           </h1>

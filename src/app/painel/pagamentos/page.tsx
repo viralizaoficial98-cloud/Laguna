@@ -93,7 +93,7 @@ export default function PagamentosPage() {
         ...history.map((p) => {
           const a = aptOf(p.apartmentId);
           const per = periodOf(p);
-          return [a?.block ?? "", a?.number ?? "", per ? formatQuarter(per) : "", p.reference, METHOD_LABELS[p.method], formatDate(p.paidAt), p.amount, statusLabel(p.status)];
+          return [a?.block ?? "", a?.number ?? "", per ? formatQuarter(per) : "", p.reference || "—", METHOD_LABELS[p.method], formatDate(p.paidAt), p.amount, statusLabel(p.status)];
         }),
       ]);
     } else {
@@ -182,7 +182,7 @@ export default function PagamentosPage() {
             columns={[
               { key: "apt", header: "Fracção", primary: true, cell: (p) => <span className="font-semibold text-navy-900">{aptLabel(apartments, p.apartmentId)}</span> },
               { key: "per", header: "Trimestre", cell: (p) => (periodOf(p) ? formatQuarter(periodOf(p)!, "short") : "—") },
-              { key: "ref", header: "Referência", cell: (p) => <span className="font-mono text-xs">{p.reference}</span> },
+              { key: "ref", header: "Referência", cell: (p) => <span className="font-mono text-xs">{p.reference || "—"}</span> },
               { key: "method", header: "Método", cell: (p) => METHOD_LABELS[p.method], hideOnMobile: true },
               { key: "date", header: "Pagamento", cell: (p) => formatDate(p.paidAt) },
               { key: "amount", header: "Valor", align: "right", cell: (p) => <span className="font-medium tabular-nums">{formatKz(p.amount)}</span> },

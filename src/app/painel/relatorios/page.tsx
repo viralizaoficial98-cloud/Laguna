@@ -8,6 +8,8 @@ import { useSession } from "@/hooks/use-session";
 import { useFinance } from "@/hooks/use-finance";
 import { downloadCsv, formatKz, formatQuarter } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
+import { can } from "@/config/permissions";
+import { PdfReports } from "@/components/app/widgets/pdf-reports";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
@@ -24,8 +26,9 @@ interface Table {
 
 export default function RelatoriosPage() {
   const session = useSession();
-  const financeOnly = session?.role === "financeiro";
-  const [report, setReport] = useState<Report>(financeOnly ? "receitas" : "ocupacao");
+  // o Gestor Operacional não tem acesso aos relatórios financeiros nem de cadastro
+  const opsOnly = !can(session?.role, "finance.view");
+  const [report, setReport] = useState<Report>(opsOnly ? "ocorrencias" : "ocupacao");
   const apartments = useDemoStore((s) => s.apartments);
   const residents = useDemoStore((s) => s.residents);
   const payments = useDemoStore((s) => s.payments);
@@ -35,22 +38,18 @@ export default function RelatoriosPage() {
   const f = useFinance();
 
   const tabs: { id: Report; label: string }[] = [
-    ...(financeOnly
+    ...(opsOnly
       ? []
       : ([
           { id: "ocupacao", label: "Ocupação" },
           { id: "apartamentos", label: "Apartamentos" },
           { id: "moradores", label: "Moradores" },
+          { id: "receitas", label: "Receitas" },
+          { id: "quotas", label: "Quotas" },
+          { id: "pagamentos", label: "Pagamentos" },
         ] as const)),
-    { id: "receitas", label: "Receitas" },
-    { id: "quotas", label: "Quotas" },
-    { id: "pagamentos", label: "Pagamentos" },
-    ...(financeOnly
-      ? []
-      : ([
-          { id: "visitas", label: "Visitas" },
-          { id: "ocorrencias", label: "Ocorrências" },
-        ] as const)),
+    { id: "visitas", label: "Visitas" },
+    { id: "ocorrencias", label: "Ocorrências" },
   ];
 
   const blocks = useMemo(() => Array.from(new Set(apartments.map((a) => a.block))).sort(), [apartments]);
@@ -123,7 +122,7 @@ export default function RelatoriosPage() {
         const cats = Array.from(new Set(occurrences.map((o) => o.category)));
         return {
           chart: <HBars data={cats.map((c) => ({ label: c, value: occurrences.filter((o) => o.category === c).length }))} />,
-          side: <Donut data={[{ key: "a", label: "Abertas", value: occurrences.filter((o) => o.status === "aberta").length }, { key: "c", label: "Em curso", value: occurrences.filter((o) => o.status === "em_curso").length }, { key: "r", label: "Resolvidas", value: occurrences.filter((o) => o.status === "resolvida").length }]} />,
+          side: <Donut data={[{ key: "a", label: "Abertas", value: occurrences.filter((o) => o.status === "aberta").length }, { key: "n", label: "Em análise", value: occurrences.filter((o) => o.status === "em_analise").length }, { key: "c", label: "Em execução", value: occurrences.filter((o) => o.status === "em_execucao").length }, { key: "r", label: "Resolvidas", value: occurrences.filter((o) => o.status === "resolvida").length }]} />,
           table: { head: ["Ocorrência", "Categoria", "Prioridade", "Estado", "Local"], rows: occurrences.map((o) => [o.title, o.category, statusLabel(o.priority), statusLabel(o.status), o.location]) } as Table,
         };
       }
@@ -155,8 +154,10 @@ export default function RelatoriosPage() {
           </>
         }
       />
+      <PdfReports />
+      <h2 className="mt-8 mb-3 text-xs font-semibold tracking-[0.2em] text-graphite-400 uppercase">Análises e exportação CSV</h2>
       <Tabs className="no-print mb-6" value={report} onChange={setReport} tabs={tabs} />
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader title={`Relatório de ${title.toLowerCase()}`} action={<DemoDataNote />} />
           <CardBody>{data.chart}</CardBody>
@@ -198,7 +199,7 @@ export default function RelatoriosPage() {
 const REVERSE: Record<string, string> = {
   Pendente: "pendente", "Em análise": "em_analise", Pago: "pago", Validado: "aprovado", Rejeitado: "rejeitado", "Em atraso": "em_atraso", Desactivado: "inactivo",
   Ocupado: "ocupado", Disponível: "disponivel", Manutenção: "manutencao", Activo: "activo", Inactivo: "inactivo",
-  Aberta: "aberta", "Em curso": "em_curso", Resolvida: "resolvida",
+  Aberta: "aberta", "Em execução": "em_execucao", Resolvida: "resolvida",
 };
 function statusKey(label: string) {
   return REVERSE[label] ?? label;

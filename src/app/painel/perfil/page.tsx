@@ -46,7 +46,7 @@ export default function PerfilPage() {
   return (
     <>
       <PageHeader eyebrow="Conta" title="Meu perfil" description="Dados pessoais e segurança da conta." />
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="h-fit">
           <CardBody className="flex flex-col items-center text-center">
             <Avatar name={session.name} size="xl" />

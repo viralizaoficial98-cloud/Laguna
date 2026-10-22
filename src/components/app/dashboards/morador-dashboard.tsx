@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Bell, Building2, CalendarClock, CheckCircle2, Megaphone, PartyPopper, ScrollText, UserPlus, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowRight, ArrowUpDown, ShieldAlert, Bell, Building2, CalendarClock, CheckCircle2, Megaphone, PartyPopper, ScrollText, UserPlus, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import type { Session } from "@/types";
@@ -21,6 +21,10 @@ export function MoradorDashboard({ session }: { session: Session }) {
   const notices = useDemoStore((s) => s.notices);
   const notifications = useDemoStore((s) => s.notifications);
   const visits = useDemoStore((s) => s.visits);
+  const elevators = useDemoStore((s) => s.elevators);
+  const occurrences = useDemoStore((s) => s.occurrences);
+  const myElevators = elevators.filter((e) => e.block === apartment?.block);
+  const myOpenOcc = occurrences.filter((o) => o.residentId === resident?.id && o.status !== "resolvida");
 
   const mine = useMemo(() => quotas.filter((q) => q.apartmentId === apartment?.id).sort((a, b) => a.period.localeCompare(b.period)), [quotas, apartment]);
   const overdue = mine.filter((q) => q.status === "em_atraso");
@@ -82,7 +86,30 @@ export function MoradorDashboard({ session }: { session: Session }) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <Link href="/painel/elevadores" className="flex items-center justify-between gap-3 rounded-2xl border border-graphite-100 bg-white p-4 shadow-soft transition hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <ArrowUpDown className="h-5 w-5 text-navy-600" />
+            <span>
+              <span className="block text-sm font-medium text-navy-900">Elevador{myElevators.length > 1 ? "es" : ""} do Bloco {apartment?.block}</span>
+              <span className="block text-xs text-graphite-500">{myElevators.length ? myElevators.map((e) => e.code).join(", ") : "Sem elevadores registados"}</span>
+            </span>
+          </span>
+          <span className="flex flex-wrap gap-1">{myElevators.map((e) => <StatusBadge key={e.id} status={e.status} />)}</span>
+        </Link>
+        <Link href="/painel/ocorrencias" className="flex items-center justify-between gap-3 rounded-2xl border border-graphite-100 bg-white p-4 shadow-soft transition hover:shadow-lift">
+          <span className="flex items-center gap-3">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            <span>
+              <span className="block text-sm font-medium text-navy-900">Minhas ocorrências</span>
+              <span className="block text-xs text-graphite-500">{myOpenOcc.length ? `${myOpenOcc.length} em tratamento pelo Gestor Operacional` : "Comunique um problema nas áreas comuns"}</span>
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-graphite-400" />
+        </Link>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader
             title="Histórico trimestral"
@@ -139,7 +166,7 @@ export function MoradorDashboard({ session }: { session: Session }) {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-4">
         <Card>
           <CardHeader title="Últimos pagamentos" action={<Link href="/painel/meus-pagamentos" className="text-xs font-medium text-navy-700">Ver todos</Link>} />
           <ul className="divide-y divide-graphite-100">

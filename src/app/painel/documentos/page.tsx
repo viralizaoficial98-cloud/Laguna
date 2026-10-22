@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { CondoDocument, DocumentCategory } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
+import { can } from "@/config/permissions";
 import { cn, downloadBlob, formatBytes, formatDate, includesText, uid } from "@/lib/utils";
 import { DEMO_TODAY } from "@/data/management";
 import { PageHeader } from "@/components/ui/page-header";
@@ -40,8 +41,8 @@ export default function DocumentosPage() {
   const documents = useDemoStore((s) => s.documents);
   const addDocument = useDemoStore((s) => s.addDocument);
   const deleteDocument = useDemoStore((s) => s.deleteDocument);
-  const canManage = session?.role === "admin_geral" || session?.role === "administrador";
-  const seeAdmin = canManage || session?.role === "financeiro";
+  const canManage = can(session?.role, "documents.manage");
+  const seeAdmin = canManage;
 
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<DocumentCategory | "">("");

@@ -150,7 +150,7 @@ export default function CircularEditorPage() {
         }
       />
       <Tabs className="mb-4 xl:hidden" value={view} onChange={setView} tabs={[{ id: "editar", label: "Editar" }, { id: "preview", label: "Pré-visualizar" }]} />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <Card className={view === "preview" ? "hidden xl:block" : ""}>
           <CardBody>
             <form className="grid gap-4 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()} noValidate>

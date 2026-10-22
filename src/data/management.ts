@@ -15,7 +15,6 @@ import type {
   CondoDocument,
   CondoSettings,
   InternalNotice,
-  Occurrence,
   Payment,
   PaymentMethod,
   Quota,
@@ -108,7 +107,7 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
         const isDemoApt = id === DEMO_RESIDENT_APT;
         const roll = r();
         const status = FORCED_OCCUPIED.has(id) ? "ocupado" : roll < 0.86 ? "ocupado" : roll < 0.96 ? "disponivel" : "manutencao";
-        const ownerName = isDemoApt ? "Carla Mendes" : `${pick(FIRST, r)} ${pick(LAST, r)}`;
+        const ownerName = isDemoApt ? "Manuel Muenho" : `${pick(FIRST, r)} ${pick(LAST, r)}`;
         const apt: Apartment = {
           id,
           block,
@@ -123,13 +122,13 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
         };
         if (status === "ocupado") {
           const isOwner = isDemoApt || r() < 0.7;
-          const name = isDemoApt ? "Carla Mendes" : isOwner ? ownerName : `${pick(FIRST, r)} ${pick(LAST, r)}`;
+          const name = isDemoApt ? "Manuel Muenho" : isOwner ? ownerName : `${pick(FIRST, r)} ${pick(LAST, r)}`;
           const resId = isDemoApt ? "res_demo" : `res_${block}_${number}`;
           const depCount = isDemoApt ? 2 : Math.floor(r() * 3);
           residents.push({
             id: resId,
             name,
-            email: isDemoApt ? "morador@laguna.demo" : emailFor(name, residents.length),
+            email: isDemoApt ? "manuel.muenho@residenciallaguna.ao" : emailFor(name, residents.length),
             phone: `+244 9${Math.floor(10 + r() * 89)} ${Math.floor(100 + r() * 899)} ${Math.floor(100 + r() * 899)}`,
             documentId: `00${Math.floor(1000000 + r() * 8999999)}LA0${Math.floor(10 + r() * 89)}`,
             apartmentId: id,
@@ -308,7 +307,7 @@ export const seedVisitChecks: VisitCheck[] = [
 
 export const seedAccessLogs: AccessLog[] = (() => {
   const r = seededRandom(77);
-  const people = ["Carla Mendes", "Nelson Pinto", "Edna Gaspar", "Rui Tavares", "Jorge Kapitango", "Técnico de manutenção", "Entrega — Encomenda", "Sara Lopes", "Hélder Costa", "Fernanda Neto"];
+  const people = ["Manuel Muenho", "Nelson Pinto", "Edna Gaspar", "Rui Tavares", "Jorge Kapitango", "Técnico de manutenção", "Entrega — Encomenda", "Sara Lopes", "Hélder Costa", "Fernanda Neto"];
   const cats: AccessLog["category"][] = ["morador", "morador", "morador", "morador", "visitante", "prestador", "entrega", "morador", "morador", "morador"];
   return Array.from({ length: 36 }, (_, i) => {
     const pi = Math.floor(r() * people.length);
@@ -327,14 +326,6 @@ export const seedAccessLogs: AccessLog[] = (() => {
   }).sort((a, b) => b.at.localeCompare(a.at));
 })();
 
-export const seedOccurrences: Occurrence[] = [
-  { id: "oc_1", title: "Lâmpada fundida no hall do Bloco 06", description: "Iluminação do hall do 2.º piso sem funcionar.", category: "Manutenção", priority: "media", status: "aberta", location: "Bloco 06 — 2.º piso", createdAt: "2026-10-18T07:45:00", reportedBy: "Carla Mendes", apartmentId: DEMO_RESIDENT_APT },
-  { id: "oc_2", title: "Ruído excessivo após as 22h", description: "Música alta reportada por vizinhos.", category: "Ruído", priority: "baixa", status: "resolvida", location: "Bloco 01 — 5.º piso", createdAt: "2026-10-17T22:30:00", reportedBy: "Portaria", apartmentId: aptId("01", "502") },
-  { id: "oc_3", title: "Viatura estacionada em local indevido", description: "Viatura a obstruir a saída de emergência.", category: "Estacionamento", priority: "alta", status: "em_curso", location: "Entrada principal", createdAt: "2026-10-17T14:10:00", reportedBy: "Portaria" },
-  { id: "oc_4", title: "Fuga de água junto à piscina", description: "Pequena fuga junto ao sistema de filtragem.", category: "Manutenção", priority: "alta", status: "em_curso", location: "Zona da piscina", createdAt: "2026-10-16T10:00:00", reportedBy: ADMIN_NAME },
-  { id: "oc_5", title: "Tentativa de acesso sem identificação", description: "Indivíduo recusou identificar-se na entrada.", category: "Segurança", priority: "alta", status: "resolvida", location: "Entrada principal", createdAt: "2026-10-15T21:10:00", reportedBy: "Portaria" },
-  { id: "oc_6", title: "Recolha de resíduos atrasada", description: "Contentores cheios junto ao Bloco 09.", category: "Limpeza", priority: "media", status: "aberta", location: "Bloco 09 — exterior", createdAt: "2026-10-15T09:30:00", reportedBy: "Portaria" },
-];
 
 const ALL_RECIPIENTS = { mode: "todos" as const, blocks: {}, listInBody: false };
 
@@ -420,9 +411,10 @@ export const seedDocuments: CondoDocument[] = [
 ];
 
 export const seedNotifications: AppNotification[] = [
-  { id: "ntf_1", title: "Novo comprovativo submetido", body: "Bloco 03 · 202 enviou comprovativo da quota do 4.º trimestre.", at: "2026-10-19T09:20:00", read: false, roles: ["admin_geral", "financeiro", "administrador"], href: "/painel/pagamentos" },
-  { id: "ntf_2", title: "Ocorrência de prioridade alta", body: "Viatura estacionada em local indevido na entrada principal.", at: "2026-10-17T14:12:00", read: false, roles: ["admin_geral", "administrador"], href: "/painel/ocorrencias" },
-  { id: "ntf_3", title: "Circular em rascunho", body: "A circular 04/ADMLR/2026 aguarda publicação.", at: "2026-10-19T08:05:00", read: true, roles: ["admin_geral", "administrador"], href: "/painel/circulares" },
+  { id: "ntf_1", title: "Novo comprovativo submetido", body: "Bloco 03 · 202 enviou comprovativo da quota do 4.º trimestre.", at: "2026-10-19T09:20:00", read: false, roles: ["administrador"], href: "/painel/pagamentos" },
+  { id: "ntf_2", title: "Elevador avariado — Bloco 09", body: "Avaria registada por Nelson Rodrigues; intervenção em curso.", at: "2026-10-20T08:15:00", read: false, roles: ["administrador", "gestor"], href: "/painel/elevadores" },
+  { id: "ntf_8", title: "Nova ocorrência de morador", body: "Bloco 06 · 201 — lâmpada fundida no hall do 2.º piso.", at: "2026-10-18T07:45:00", read: false, roles: ["gestor"], href: "/painel/ocorrencias" },
+  { id: "ntf_3", title: "Circular em rascunho", body: "A circular 04/ADMLR/2026 aguarda publicação.", at: "2026-10-19T08:05:00", read: true, roles: ["administrador"], href: "/painel/circulares" },
   { id: "ntf_4", title: "Visita de grupo autorizada", body: "Aniversário — Bloco 06 · 201, 25/10/2026 (15 convidados).", at: "2026-10-17T19:00:00", read: false, roles: ["porteiro"], href: "/painel/portaria" },
   { id: "ntf_5", title: "Quota do 4.º trimestre disponível", body: "Quota trimestral de Outubro a Dezembro de 2026.", at: "2026-10-01T08:00:00", read: false, roles: ["morador"], href: "/painel/minhas-quotas" },
   { id: "ntf_6", title: "Nova circular publicada", body: "Circular 03/ADMLR/2026 — Pagamento da quota do 4.º trimestre.", at: "2026-10-01T09:00:00", read: true, roles: ["morador"], href: "/painel/circulares" },

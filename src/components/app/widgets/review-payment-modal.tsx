@@ -79,7 +79,7 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
             ["Valor", <span key="v" className="font-semibold text-navy-900">{formatKz(payment.amount)}</span>],
             ["Morador", resident?.name ?? "—"],
             ["Método", METHOD_LABELS[payment.method]],
-            ["Referência", payment.reference],
+            ["Referência", payment.reference || "Não indicada"],
             ["Data do pagamento", formatDateTime(payment.paidAt)],
             ["Submetido em", formatDateTime(payment.submittedAt)],
             ...(payment.reviewedBy ? [["Revisto por", `${payment.reviewedBy}${payment.reviewedAt ? ` · ${formatDateTime(payment.reviewedAt)}` : ""}`]] : []),

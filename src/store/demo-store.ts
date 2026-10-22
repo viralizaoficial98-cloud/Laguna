@@ -20,9 +20,14 @@ import type {
   Circular,
   CondoDocument,
   CondoSettings,
+  Elevator,
+  ElevatorStatus,
+  Expense,
   GuestPresence,
   InternalNotice,
   Occurrence,
+  OccurrenceEvent,
+  OpsTask,
   Payment,
   Quota,
   Resident,
@@ -39,10 +44,10 @@ import {
   seedDocuments,
   seedNotices,
   seedNotifications,
-  seedOccurrences,
   seedVisitChecks,
   seedVisits,
 } from "@/data/management";
+import { seedElevators, seedExpenses, seedOccurrences, seedOpsTasks } from "@/data/operations";
 import { can, PermissionError, type Permission } from "@/config/permissions";
 import { useAuthStore } from "@/store/auth-store";
 import { parseQuarter, todayISO, uid } from "@/lib/utils";
@@ -58,6 +63,9 @@ interface DemoData {
   visits: Visit[];
   visitChecks: VisitCheck[];
   occurrences: Occurrence[];
+  elevators: Elevator[];
+  opsTasks: OpsTask[];
+  expenses: Expense[];
   accessLogs: AccessLog[];
   documents: CondoDocument[];
   notifications: AppNotification[];
@@ -80,7 +88,20 @@ interface DemoActions {
   saveVisit: (v: Visit) => void;
   cancelVisit: (id: string) => void;
   checkGuest: (visitId: string, guestId: string, type: "entrada" | "saida") => void;
+  /** Gestor: cria/edita ocorrências. */
   saveOccurrence: (o: Occurrence) => void;
+  /** Morador: submete uma ocorrência da sua fracção. */
+  reportOccurrence: (o: Pick<Occurrence, "title" | "description" | "category" | "location" | "photos">) => Occurrence;
+  /** Gestor: muda estado/atribuição/prioridade com registo no histórico. */
+  updateOccurrence: (id: string, patch: Partial<Pick<Occurrence, "status" | "assignee" | "priority" | "resolution">>, note?: string) => void;
+  /** Administrador ou Gestor: nota de supervisão/observação no histórico. */
+  addOccurrenceNote: (id: string, text: string) => void;
+  saveElevator: (e: Elevator) => void;
+  deleteElevator: (id: string) => void;
+  /** Gestor: muda o estado do elevador e regista o evento (avaria, intervenção, manutenção). */
+  setElevatorStatus: (id: string, status: ElevatorStatus, input: { type: "avaria" | "intervencao" | "manutencao" | "estado"; description: string; createOccurrence?: boolean }) => void;
+  saveOpsTask: (t: OpsTask) => void;
+  deleteOpsTask: (id: string) => void;
   addDocument: (d: CondoDocument) => void;
   deleteDocument: (id: string) => void;
   markNotificationsRead: (ids: string[]) => void;
@@ -96,6 +117,9 @@ function initialData(): DemoData {
     visits: seedVisits,
     visitChecks: seedVisitChecks,
     occurrences: seedOccurrences,
+    elevators: seedElevators,
+    opsTasks: seedOpsTasks,
+    expenses: seedExpenses,
     accessLogs: seedAccessLogs,
     documents: seedDocuments,
     notifications: seedNotifications,
@@ -236,10 +260,10 @@ export const useDemoStore = create<DemoData & DemoActions>()(
             {
               id: uid("ntf"),
               title: "Novo comprovativo submetido",
-              body: `Pagamento ${input.reference} aguarda validação.`,
+              body: `Pagamento${input.reference ? ` ${input.reference}` : " (sem referência)"} aguarda validação.`,
               at: new Date().toISOString(),
               read: false,
-              roles: ["admin_geral", "administrador", "financeiro"],
+              roles: ["administrador"],
               href: "/painel/pagamentos",
             },
             ...s.notifications,
@@ -351,6 +375,138 @@ export const useDemoStore = create<DemoData & DemoActions>()(
         set((s) => ({ occurrences: upsert(s.occurrences, o) }));
       },
 
+      reportOccurrence: (input) => {
+        assertCan("occurrences.report");
+        const sess = session()!;
+        const s = get();
+        const resident = s.residents.find((r) => r.id === sess.residentId);
+        const apt = s.apartments.find((a) => a.id === resident?.apartmentId);
+        const now = new Date().toISOString();
+        const occ: Occurrence = {
+          ...input,
+          id: uid("oc"),
+          priority: "media",
+          status: "aberta",
+          block: apt?.block,
+          apartmentId: apt?.id,
+          residentId: resident?.id,
+          createdAt: now,
+          reportedBy: sess.name,
+          history: [{ id: uid("oh"), at: now, by: sess.name, role: sess.role, text: sess.role === "morador" ? "Ocorrência submetida pelo morador." : "Ocorrência registada.", status: "aberta" }],
+        };
+        set({
+          occurrences: [occ, ...s.occurrences],
+          notifications: [
+            { id: uid("ntf"), title: "Nova ocorrência", body: `${occ.category} — ${occ.title}${apt ? ` (Bloco ${apt.block} · ${apt.number})` : ""}`, at: now, read: false, roles: ["gestor"], href: "/painel/ocorrencias" },
+            ...s.notifications,
+          ],
+        });
+        return occ;
+      },
+
+      updateOccurrence: (id, patch, note) => {
+        assertCan("occurrences.manage");
+        const sess = session()!;
+        const now = new Date().toISOString();
+        set((s) => ({
+          occurrences: s.occurrences.map((o) => {
+            if (o.id !== id) return o;
+            const changes: string[] = [];
+            if (patch.status && patch.status !== o.status) changes.push(`Estado: ${patch.status.replace("_", " ")}`);
+            if (patch.assignee !== undefined && patch.assignee !== o.assignee) changes.push(`Responsável: ${patch.assignee || "—"}`);
+            if (patch.priority && patch.priority !== o.priority) changes.push(`Prioridade: ${patch.priority}`);
+            const ev: OccurrenceEvent = { id: uid("oh"), at: now, by: sess.name, role: sess.role, text: [changes.join(" · "), note].filter(Boolean).join(" — ") || "Actualização.", status: patch.status };
+            const resolved = patch.status === "resolvida" && o.status !== "resolvida";
+            return { ...o, ...patch, resolvedAt: resolved ? now : patch.status && patch.status !== "resolvida" ? undefined : o.resolvedAt, history: [...o.history, ev] };
+          }),
+        }));
+      },
+
+      addOccurrenceNote: (id, text) => {
+        assertCan("occurrences.supervise");
+        const sess = session()!;
+        set((s) => ({
+          occurrences: s.occurrences.map((o) =>
+            o.id === id ? { ...o, history: [...o.history, { id: uid("oh"), at: new Date().toISOString(), by: sess.name, role: sess.role, text: sess.role === "administrador" ? `Supervisão: ${text}` : text }] } : o,
+          ),
+        }));
+      },
+
+      saveElevator: (e) => {
+        assertCan("elevators.manage");
+        set((s) => ({ elevators: upsert(s.elevators, e) }));
+      },
+      deleteElevator: (id) => {
+        assertCan("elevators.manage");
+        set((s) => ({ elevators: s.elevators.filter((e) => e.id !== id) }));
+      },
+
+      setElevatorStatus: (id, status, input) => {
+        assertCan("elevators.manage");
+        const sess = session()!;
+        const s = get();
+        const elv = s.elevators.find((e) => e.id === id);
+        if (!elv) throw new Error("Elevador inexistente.");
+        const now = new Date().toISOString();
+        const today = todayISO();
+        let occurrences = s.occurrences;
+        let notifications = s.notifications;
+        // avaria → cria ocorrência ligada (mesma fonte de dados para os dois dashboards)
+        if (status === "avariado" && input.createOccurrence) {
+          const occ: Occurrence = {
+            id: uid("oc"),
+            title: `Elevador ${elv.code} avariado`,
+            description: input.description,
+            category: "Elevadores",
+            priority: "urgente",
+            status: "aberta",
+            block: elv.block,
+            location: `Bloco ${elv.block} — elevador`,
+            elevatorId: elv.id,
+            assignee: elv.provider,
+            createdAt: now,
+            reportedBy: sess.name,
+            history: [{ id: uid("oh"), at: now, by: sess.name, role: sess.role, text: "Avaria registada no módulo Elevadores.", status: "aberta" }],
+          };
+          occurrences = [occ, ...occurrences];
+          notifications = [
+            { id: uid("ntf"), title: `Elevador avariado — Bloco ${elv.block}`, body: input.description, at: now, read: false, roles: ["administrador", "gestor"], href: "/painel/elevadores" },
+            ...notifications,
+          ];
+        }
+        // reposição em funcionamento → resolve ocorrências de elevador em aberto
+        if (status === "operacional") {
+          occurrences = occurrences.map((o) =>
+            o.elevatorId === id && o.status !== "resolvida"
+              ? { ...o, status: "resolvida", resolvedAt: now, resolution: input.description, history: [...o.history, { id: uid("oh"), at: now, by: sess.name, role: sess.role, text: `Resolvida no módulo Elevadores: ${input.description}`, status: "resolvida" }] }
+              : o,
+          );
+        }
+        set({
+          occurrences,
+          notifications,
+          elevators: s.elevators.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  status,
+                  lastMaintenance: input.type === "manutencao" || input.type === "intervencao" ? today : e.lastMaintenance,
+                  history: [...e.history, { id: uid("elh"), at: now, by: sess.name, type: input.type, description: input.description, status }],
+                }
+              : e,
+          ),
+        });
+      },
+
+      saveOpsTask: (t) => {
+        assertCan("operations.manage");
+        set((s) => ({ opsTasks: upsert(s.opsTasks, t) }));
+      },
+      deleteOpsTask: (id) => {
+        assertCan("operations.manage");
+        set((s) => ({ opsTasks: s.opsTasks.filter((t) => t.id !== id) }));
+      },
+
       addDocument: (d) => {
         assertCan("documents.manage");
         set((s) => ({ documents: [d, ...s.documents] }));
@@ -367,7 +523,7 @@ export const useDemoStore = create<DemoData & DemoActions>()(
     }),
     {
       name: "laguna-demo-data",
-      version: 3,
+      version: 4,
       storage: safeStorage,
       migrate: () => initialData() as DemoData & DemoActions,
       partialize: (s) => ({

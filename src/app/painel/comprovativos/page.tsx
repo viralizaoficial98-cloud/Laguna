@@ -53,7 +53,7 @@ export default function ComprovativosPage() {
           })}
         </div>
       )}
-      <Modal open={!!sel} onClose={() => setSel(null)} size="lg" title={sel?.proof?.name ?? ""} description={sel ? `Referência ${sel.reference}` : ""}>
+      <Modal open={!!sel} onClose={() => setSel(null)} size="lg" title={sel?.proof?.name ?? ""} description={sel ? `Referência ${sel.reference || "não indicada"}` : ""}>
         {sel && <ProofPreview payment={sel} />}
       </Modal>
     </>

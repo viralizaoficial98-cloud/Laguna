@@ -31,6 +31,7 @@ export default function CircularesPage() {
   const saveCircular = useDemoStore((s) => s.saveCircular);
   const deleteCircular = useDemoStore((s) => s.deleteCircular);
   const isStaff = can(session?.role, "circulars.issue");
+  const viewAll = can(session?.role, "circulars.view_all");
 
   const [tab, setTab] = useState<"todas" | CircularStatus>(isStaff ? "todas" : "publicada");
   const [q, setQ] = useState("");
@@ -39,7 +40,7 @@ export default function CircularesPage() {
   const [deleting, setDeleting] = useState<Circular | null>(null);
 
   // o morador vê apenas as circulares publicadas destinadas à sua fracção
-  const visible = isStaff ? circulars : circulars.filter((c) => c.status === "publicada" && circularTargets(c, apartment));
+  const visible = isStaff ? circulars : circulars.filter((c) => c.status === "publicada" && (viewAll || circularTargets(c, apartment)));
   const rows = useMemo(
     () =>
       visible
@@ -59,7 +60,7 @@ export default function CircularesPage() {
       <PageHeader
         eyebrow="Comunicação"
         title="Circulares"
-        description={isStaff ? "Emissão de circulares no modelo oficial (N.º/ADMLR/ano), pré-visualização, PDF A4, publicação e histórico." : "Circulares publicadas pela Administração para a sua fracção."}
+        description={isStaff ? "Emissão de circulares no modelo oficial (N.º/ADMLR/ano), pré-visualização, PDF A4, publicação e histórico." : viewAll ? "Circulares publicadas pela Administração (consulta)." : "Circulares publicadas pela Administração para a sua fracção."}
         actions={
           isStaff && (
             <Link href="/painel/circulares/editor" className={buttonClass("primary")}>

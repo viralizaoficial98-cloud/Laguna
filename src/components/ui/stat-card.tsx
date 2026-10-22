@@ -22,6 +22,7 @@ export function StatCard({
   tone = "navy",
   index = 0,
   highlight,
+  trend,
 }: {
   label: string;
   value: ReactNode;
@@ -30,6 +31,8 @@ export function StatCard({
   tone?: keyof typeof tones;
   index?: number;
   highlight?: boolean;
+  /** Variação percentual face ao período anterior. */
+  trend?: { value: number; goodWhenUp?: boolean } | null;
 }) {
   return (
     <motion.div
@@ -49,7 +52,21 @@ export function StatCard({
         </span>
       </div>
       <p className={cn("mt-3 text-2xl font-semibold tracking-tight tabular-nums", highlight ? "text-white" : "text-navy-900")}>{value}</p>
-      {hint && <p className={cn("mt-1 text-xs", highlight ? "text-navy-200" : "text-graphite-500")}>{hint}</p>}
+      {(hint || trend) && (
+        <p className={cn("mt-1 flex flex-wrap items-center gap-1.5 text-xs", highlight ? "text-navy-200" : "text-graphite-500")}>
+          {trend && Number.isFinite(trend.value) && (
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                trend.value === 0 ? "bg-graphite-100 text-graphite-600" : (trend.value > 0) === (trend.goodWhenUp ?? true) ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
+              )}
+            >
+              {trend.value > 0 ? "▲" : trend.value < 0 ? "▼" : "■"} {Math.abs(trend.value).toFixed(1)}%
+            </span>
+          )}
+          {hint}
+        </p>
+      )}
     </motion.div>
   );
 }

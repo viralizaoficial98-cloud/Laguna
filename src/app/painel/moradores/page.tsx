@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import type { Resident } from "@/types";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
+import { useSession } from "@/hooks/use-session";
+import { can } from "@/config/permissions";
 import { formatDate, includesText, uid } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -53,6 +55,8 @@ export default function MoradoresPage() {
   const apartments = useDemoStore((s) => s.apartments);
   const saveResident = useDemoStore((s) => s.saveResident);
   const deleteResident = useDemoStore((s) => s.deleteResident);
+  const session = useSession();
+  const canManage = can(session?.role, "residents.manage");
 
   const [q, setQ] = useState(params.get("q") ?? "");
   const [tab, setTab] = useState<"todos" | "activo" | "inactivo">("todos");
@@ -75,11 +79,13 @@ export default function MoradoresPage() {
       <PageHeader
         eyebrow="Gestão"
         title="Moradores"
-        description="Cadastro, perfis, associação a apartamentos e dependentes."
+        description={canManage ? "Cadastro, perfis, associação a apartamentos e dependentes." : "Consulta de moradores e contactos para a gestão operacional."}
         actions={
-          <Button onClick={() => setEditing("new")}>
-            <UserPlus className="h-4 w-4" /> Novo morador
-          </Button>
+          canManage && (
+            <Button onClick={() => setEditing("new")}>
+              <UserPlus className="h-4 w-4" /> Novo morador
+            </Button>
+          )
         }
       />
       <Card>
@@ -134,12 +140,16 @@ export default function MoradoresPage() {
                   <IconBtn label="Ver perfil" onClick={() => setViewing(r)}>
                     <Eye className="h-4 w-4" />
                   </IconBtn>
-                  <IconBtn label="Editar" onClick={() => setEditing(r)}>
-                    <Pencil className="h-4 w-4" />
-                  </IconBtn>
-                  <IconBtn label="Eliminar" danger onClick={() => setDeleting(r)}>
-                    <Trash2 className="h-4 w-4" />
-                  </IconBtn>
+                  {canManage && (
+                    <>
+                      <IconBtn label="Editar" onClick={() => setEditing(r)}>
+                        <Pencil className="h-4 w-4" />
+                      </IconBtn>
+                      <IconBtn label="Eliminar" danger onClick={() => setDeleting(r)}>
+                        <Trash2 className="h-4 w-4" />
+                      </IconBtn>
+                    </>
+                  )}
                 </div>
               ),
             },
@@ -160,7 +170,7 @@ export default function MoradoresPage() {
         }}
       />
 
-      <Modal open={!!viewing} onClose={() => setViewing(null)} size="lg" title="Perfil do morador" footer={viewing && <Button onClick={() => { setEditing(viewing); setViewing(null); }}><Pencil className="h-4 w-4" /> Editar</Button>}>
+      <Modal open={!!viewing} onClose={() => setViewing(null)} size="lg" title="Perfil do morador" footer={viewing && canManage && <Button onClick={() => { setEditing(viewing); setViewing(null); }}><Pencil className="h-4 w-4" /> Editar</Button>}>
         {viewing && (
           <div>
             <div className="flex flex-wrap items-center gap-4">

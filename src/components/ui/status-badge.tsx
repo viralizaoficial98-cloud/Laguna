@@ -32,10 +32,23 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   // ocorrências
   aberta: { label: "Aberta", tone: "warning" },
   em_curso: { label: "Em curso", tone: "info" },
+  em_execucao: { label: "Em execução", tone: "info" },
   resolvida: { label: "Resolvida", tone: "success" },
   baixa: { label: "Baixa", tone: "neutral" },
-  media: { label: "Média", tone: "warning" },
-  alta: { label: "Alta", tone: "danger" },
+  media: { label: "Média", tone: "gold" },
+  alta: { label: "Alta", tone: "warning" },
+  urgente: { label: "Urgente", tone: "danger" },
+  // elevadores
+  operacional: { label: "Operacional", tone: "success" },
+  avariado: { label: "Avariado", tone: "danger" },
+  em_manutencao: { label: "Em manutenção", tone: "warning" },
+  fora_servico: { label: "Fora de serviço", tone: "neutral" },
+  // actividades operacionais
+  programada: { label: "Programada", tone: "navy" },
+  concluida: { label: "Concluída", tone: "success" },
+  atrasada: { label: "Atrasada", tone: "danger" },
+  conforme: { label: "Conforme", tone: "success" },
+  nao_conforme: { label: "Não conforme", tone: "danger" },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

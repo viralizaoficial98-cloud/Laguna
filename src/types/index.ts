@@ -4,7 +4,8 @@
  * pelo que os nomes e relações (ids) devem manter-se estáveis.
  */
 
-export type Role = "admin_geral" | "administrador" | "financeiro" | "porteiro" | "morador";
+/** Perfis de acesso: Administrador do Condomínio, Gestor Operacional, Morador e Portaria. */
+export type Role = "administrador" | "gestor" | "morador" | "porteiro";
 
 export interface DemoUser {
   id: string;
@@ -162,6 +163,7 @@ export interface Payment {
   residentId?: string;
   amount: number;
   method: PaymentMethod;
+  /** Referência da transacção — OPCIONAL (pode ser vazia). */
   reference: string;
   paidAt: string;
   submittedAt: string;
@@ -269,9 +271,6 @@ export interface VisitCheck {
 
 export type GuestPresence = "aguardando" | "no_interior" | "saiu";
 
-export type OccurrencePriority = "baixa" | "media" | "alta";
-export type OccurrenceStatus = "aberta" | "em_curso" | "resolvida";
-
 export interface CondoSettings {
   /** Valor da quota trimestral (Kz). */
   quarterlyQuota: number;
@@ -279,17 +278,120 @@ export interface CondoSettings {
   dueDay: number;
 }
 
+export type OccurrencePriority = "baixa" | "media" | "alta" | "urgente";
+export type OccurrenceStatus = "aberta" | "em_analise" | "em_execucao" | "resolvida";
+export type OccurrenceCategory =
+  | "Elevadores"
+  | "Electricidade"
+  | "Água"
+  | "Canalização"
+  | "Limpeza"
+  | "Jardinagem"
+  | "Segurança"
+  | "Infraestruturas"
+  | "Outras";
+
+export interface OccurrenceEvent {
+  id: string;
+  at: string;
+  by: string;
+  role: Role;
+  text: string;
+  status?: OccurrenceStatus;
+}
+
 export interface Occurrence {
   id: string;
   title: string;
   description: string;
-  category: "Segurança" | "Manutenção" | "Ruído" | "Limpeza" | "Estacionamento" | "Outro";
+  category: OccurrenceCategory;
   priority: OccurrencePriority;
   status: OccurrenceStatus;
+  /** Bloco "01"–"10" ou ausente para áreas comuns gerais. */
+  block?: string;
   apartmentId?: string;
   location: string;
+  assignee?: string;
+  elevatorId?: string;
+  /** Morador que submeteu a ocorrência (quando aplicável). */
+  residentId?: string;
+  photos?: { name: string; dataUrl?: string }[];
+  resolution?: string;
   createdAt: string;
+  resolvedAt?: string;
   reportedBy: string;
+  history: OccurrenceEvent[];
+}
+
+// ————— Operações: elevadores, limpeza, jardinagem e manutenção —————
+
+export type ElevatorStatus = "operacional" | "avariado" | "em_manutencao" | "fora_servico";
+
+export interface ElevatorEvent {
+  id: string;
+  at: string;
+  by: string;
+  type: "avaria" | "intervencao" | "manutencao" | "estado";
+  description: string;
+  status: ElevatorStatus;
+}
+
+export interface Elevator {
+  id: string;
+  block: string;
+  code: string;
+  status: ElevatorStatus;
+  lastMaintenance?: string;
+  nextMaintenance?: string;
+  provider: string;
+  notes?: string;
+  /** true = registo de demonstração; o inventário real deve ser configurado. */
+  demo: boolean;
+  history: ElevatorEvent[];
+}
+
+export type OpsArea = "limpeza" | "jardinagem" | "manutencao";
+export type OpsStatus = "programada" | "em_execucao" | "concluida";
+
+export interface OpsInspection {
+  result: "conforme" | "nao_conforme";
+  notes?: string;
+  by: string;
+  at: string;
+}
+
+/** Actividade operacional (plano de limpeza, jardinagem ou manutenção). */
+export interface OpsTask {
+  id: string;
+  area: OpsArea;
+  /** Limpeza: tipo de serviço · Jardinagem: Rega/Poda/… · Manutenção: Preventiva/Correctiva */
+  type: string;
+  title: string;
+  location: string;
+  block?: string;
+  responsible: string;
+  frequency?: "Diária" | "Semanal" | "Quinzenal" | "Mensal" | "Trimestral" | "Pontual";
+  scheduledDate: string;
+  dueDate?: string;
+  executedDate?: string;
+  status: OpsStatus;
+  equipment?: string;
+  estimatedCost?: number;
+  actualCost?: number;
+  inspection?: OpsInspection;
+  notes?: string;
+}
+
+export type ExpenseCategory = "Limpeza" | "Jardinagem" | "Manutenção" | "Elevadores" | "Segurança e portaria" | "Energia e água" | "Administração";
+
+/** Despesa do condomínio (contratos e serviços). Os custos de manutenção concluída vêm das actividades. */
+export interface Expense {
+  id: string;
+  date: string;
+  period: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
 }
 
 export interface AccessLog {

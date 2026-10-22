@@ -40,7 +40,7 @@ export function PendingPayments({ limit = 5 }: { limit?: number }) {
                   {aptLabel(apartments, p.apartmentId)} <span className="font-normal text-graphite-500">· {residents.find((r) => r.id === p.residentId)?.name ?? "—"}</span>
                 </p>
                 <p className="text-xs text-graphite-500">
-                  {formatKz(p.amount)} · {p.reference} · {formatDate(p.submittedAt)}
+                  {formatKz(p.amount)} · {p.reference || "sem referência"} · {formatDate(p.submittedAt)}
                 </p>
               </div>
               <Button size="sm" variant="subtle" onClick={() => setSelected(p)}>
