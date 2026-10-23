@@ -78,7 +78,8 @@ export const infrastructures: Infrastructure[] = [
 ];
 
 /**
- * Tipologias existentes no Residencial Laguna: exclusivamente T2, T3 e T4.
+ * Tipologias existentes no Residencial Laguna: exclusivamente T2 e Duplex
+ * (Duplex: 3 quartos, sala e varanda). 10 blocos, 100 apartamentos — 80 T2 e 20 Duplex.
  * Áreas, casas de banho e preços aguardam confirmação da Administração.
  */
 export const typologies: Typology[] = [
@@ -94,25 +95,14 @@ export const typologies: Typology[] = [
     confirmed: true,
   },
   {
-    slug: "t3",
-    name: "Apartamento T3",
-    label: "T3",
+    slug: "duplex",
+    name: "Apartamento Duplex",
+    label: "Duplex",
     bedrooms: 3,
     bathrooms: 0,
-    summary: "Mais espaço para a família, combinando conforto interior com a tranquilidade de um condomínio com zonas de lazer.",
-    features: ["3 quartos", "Sala e cozinha", "Acesso às piscinas e áreas comuns"],
+    summary: "Apartamento em dois níveis, com três quartos, sala e varanda — mais espaço para a família num condomínio com zonas de lazer.",
+    features: ["3 quartos", "Sala", "Varanda", "Acesso às piscinas e áreas comuns"],
     images: ["/images/laguna/fachadas/blocos-residenciais.webp", "/images/laguna/lazer/piscina-vista-geral.webp"],
-    confirmed: true,
-  },
-  {
-    slug: "t4",
-    name: "Apartamento T4",
-    label: "T4",
-    bedrooms: 4,
-    bathrooms: 0,
-    summary: "A tipologia mais ampla do condomínio, pensada para famílias que precisam de mais quartos e espaço.",
-    features: ["4 quartos", "Sala e cozinha", "Acesso às piscinas e áreas comuns"],
-    images: ["/images/laguna/lazer/piscina-e-deck.webp", "/images/laguna/fachadas/entrada-principal.webp"],
     confirmed: true,
   },
 ];

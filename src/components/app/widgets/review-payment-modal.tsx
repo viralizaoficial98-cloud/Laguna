@@ -1,15 +1,15 @@
 "use client";
 
-import { Check, FileText, X } from "lucide-react";
+import { Check, Download, FileText, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Payment } from "@/types";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
-import { useSession } from "@/hooks/use-session";
+import { roleLabels } from "@/data/users";
 import { formatBytes, formatDateTime, formatKz, formatQuarter } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { Field, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export const METHOD_LABELS: Record<Payment["method"], string> = {
@@ -20,16 +20,18 @@ export const METHOD_LABELS: Record<Payment["method"], string> = {
 };
 
 export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | null; onClose: () => void }) {
-  const session = useSession();
   const review = useDemoStore((s) => s.reviewPayment);
+  const allowPartial = useDemoStore((s) => s.settings.allowPartial);
   const apartments = useDemoStore((s) => s.apartments);
   const quota = useDemoStore((s) => s.quotas.find((q) => q.id === payment?.quotaId));
   const resident = useDemoStore((s) => s.residents.find((r) => r.id === payment?.residentId));
   const [note, setNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
+  const [validated, setValidated] = useState("");
 
   const close = () => {
     setNote("");
+    setValidated("");
     setRejecting(false);
     onClose();
   };
@@ -43,10 +45,18 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
       toast.error("Indique o motivo da rejeição.");
       return;
     }
-    review(payment.id, d, session?.name ?? "Financeiro", note || undefined);
-    toast.success(d === "aprovado" ? "Pagamento aprovado" : "Pagamento rejeitado", { description: "Indicadores actualizados (demonstração)." });
-    close();
+    try {
+      review(payment.id, d, { note: note.trim() || undefined, validatedAmount: d === "aprovado" && validated ? Number(validated) : undefined });
+      toast.success(d === "aprovado" ? "Pagamento aprovado" : "Pagamento rejeitado", { description: "Conta corrente, quota e indicadores actualizados (demonstração)." });
+      close();
+    } catch (e) {
+      // ex.: outro responsável já decidiu este comprovativo — não há decisões duplicadas
+      toast.error(e instanceof Error ? e.message : "Não foi possível registar a decisão.");
+      if (!canReview) close();
+    }
   };
+  const apt = apartments.find((a) => a.id === payment.apartmentId);
+  const remaining = quota ? quota.amount - quota.paidAmount : payment.amount;
 
   return (
     <Modal
@@ -76,13 +86,21 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
         <dl className="space-y-3 text-sm">
           {[
             ["Estado", <StatusBadge key="s" status={payment.status} />],
-            ["Valor", <span key="v" className="font-semibold text-navy-900">{formatKz(payment.amount)}</span>],
+            ["Valor submetido", <span key="v" className="font-semibold text-navy-900">{formatKz(payment.amount)}</span>],
+            ...(payment.validatedAmount !== undefined ? [["Valor validado", formatKz(payment.validatedAmount)]] : []),
             ["Morador", resident?.name ?? "—"],
+            ["Bloco · apartamento", apt ? `Bloco ${apt.block} · ${apt.number}` : "—"],
+            ["Tipologia", quota?.typology ?? apt?.typology ?? "—"],
+            ["Trimestre · ano", quota ? `${quota.quarter}.º Trimestre · ${quota.year}` : "—"],
+            ...(quota ? [["Quota · já pago", `${formatKz(quota.amount)} · ${formatKz(quota.paidAmount)}`]] : []),
             ["Método", METHOD_LABELS[payment.method]],
             ["Referência", payment.reference || "Não indicada"],
             ["Data do pagamento", formatDateTime(payment.paidAt)],
             ["Submetido em", formatDateTime(payment.submittedAt)],
-            ...(payment.reviewedBy ? [["Revisto por", `${payment.reviewedBy}${payment.reviewedAt ? ` · ${formatDateTime(payment.reviewedAt)}` : ""}`]] : []),
+            ...(payment.reviewedBy ? [["Decidido por", `${payment.reviewedBy}${payment.reviewedByRole ? ` (${roleLabels[payment.reviewedByRole]})` : ""}${payment.reviewedAt ? ` · ${formatDateTime(payment.reviewedAt)}` : ""}`]] : []),
+            ...(payment.registeredBy ? [["Registado por", payment.registeredBy]] : []),
+            ...(payment.receiptNumber ? [["Recibo", payment.receiptNumber]] : []),
+            ["Comprovativo (id)", payment.proof?.name ?? "—"],
             ...(payment.note ? [["Observação", payment.note]] : []),
           ].map(([k, v]) => (
             <div key={String(k)} className="flex items-start justify-between gap-4 border-b border-graphite-100 pb-2.5">
@@ -96,6 +114,38 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
           <ProofPreview payment={payment} />
         </div>
       </div>
+      {payment.status === "aprovado" && payment.receiptNumber && (
+        <Button
+          variant="outline"
+          className="mt-6"
+          onClick={() =>
+            import("@/lib/finance-docs").then((m) =>
+              m.downloadReceipt({
+                receiptNumber: payment.receiptNumber!,
+                payer: resident?.name ?? "—",
+                apartment: apt ? `Bloco ${apt.block} · ${apt.number}` : "—",
+                typology: quota?.typology,
+                description: quota?.description ?? "Quota do condomínio",
+                period: quota ? formatQuarter(quota.period) : undefined,
+                amount: payment.validatedAmount ?? payment.amount,
+                method: METHOD_LABELS[payment.method],
+                reference: payment.reference,
+                paidAt: payment.paidAt,
+                validatedBy: payment.reviewedBy ?? "—",
+                validatedRole: payment.reviewedByRole ? roleLabels[payment.reviewedByRole] : undefined,
+                validatedAt: payment.reviewedAt ?? payment.submittedAt,
+              }),
+            )
+          }
+        >
+          <Download className="h-4 w-4" /> Recibo PDF
+        </Button>
+      )}
+      {canReview && allowPartial && (
+        <Field label="Valor validado (Kz)" className="mt-6" hint={`Deixe em branco para validar o valor submetido. Em dívida nesta quota: ${formatKz(remaining)}. Um valor inferior regista pagamento parcial.`}>
+          <Input type="number" min={1} max={remaining} value={validated} onChange={(e) => setValidated(e.target.value)} placeholder={String(payment.amount)} />
+        </Field>
+      )}
       {canReview && (
         <Field label="Observação / motivo de rejeição" className="mt-6" error={rejecting && !note.trim() ? "Obrigatório para rejeitar." : undefined}>
           <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: Valor não corresponde à quota." />

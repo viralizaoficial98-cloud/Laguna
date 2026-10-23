@@ -23,8 +23,10 @@ export function financialReport(f: Finance, period: string, author: string): Rep
     kpis: [
       { label: "Receita prevista", value: formatKz(f.expected) },
       { label: "Receita recebida", value: formatKz(f.received) },
-      { label: "Montante em dívida", value: formatKz(f.debt) },
+      { label: "Por cobrar (no prazo)", value: formatKz(f.pending) },
       { label: "Taxa de cobrança", value: pct(f.collectionRate) },
+      { label: "Dívidas vencidas", value: formatKz(f.overdue) },
+      { label: "Receita de reservas", value: formatKz(f.reservationRevenue) },
       { label: "Despesas totais", value: formatKz(f.expensesTotal) },
       { label: "Resultado financeiro", value: formatKz(f.result) },
     ],
@@ -36,8 +38,8 @@ export function financialReport(f: Finance, period: string, author: string): Rep
     summary: [
       `No período, foram emitidas quotas trimestrais no valor de ${formatKz(f.expected)}, das quais foram recebidos ${formatKz(f.received)} (taxa de cobrança de ${pct(f.collectionRate)}).`,
       `As despesas operacionais totalizaram ${formatKz(f.expensesTotal)}${topExpense ? `, com maior peso em ${topExpense.label} (${formatKz(topExpense.value)})` : ""}.`,
-      `O resultado financeiro (recebido − despesas) é de ${formatKz(f.result)}.`,
-      `Encontram-se em dívida ${formatKz(f.debt)} (${f.overdueCount} quotas em atraso e ${f.pendingCount} pendentes).`,
+      `A receita de reservas de salões confirmadas é de ${formatKz(f.reservationRevenue)}. O resultado financeiro (quotas recebidas + reservas − despesas) é de ${formatKz(f.result)}.`,
+      `Dívidas vencidas: ${formatKz(f.overdue)} (${f.overdueCount} quotas, ${f.arrearsCount} apartamentos). Por cobrar no prazo: ${formatKz(f.pending)} (${f.pendingCount} quotas).`,
     ],
     pending: [
       ...(f.analysisCount ? [`${f.analysisCount} comprovativos a aguardar validação (${formatKz(f.analysis)}).`] : []),
@@ -50,9 +52,31 @@ export function financialReport(f: Finance, period: string, author: string): Rep
       ...(f.analysisCount ? ["Validar os comprovativos pendentes para actualizar a situação dos condóminos."] : []),
     ],
     tables: [
-      { title: "Situação por bloco", head: ["Bloco", "Quotas", "Pagas", "Taxa", "Dívida"], rows: f.byBlock.map((b) => [`Bloco ${b.block}`, b.total, b.pagas, `${b.taxa}%`, formatKz(b.divida)]) },
+      { title: "Situação por bloco", head: ["Bloco", "Quotas", "Pagas", "Taxa", "Dívida vencida"], rows: f.byBlock.map((b) => [`Bloco ${b.block}`, b.total, b.pagas, `${b.taxa}%`, formatKz(b.divida)]) },
+      { title: "Receitas por tipologia", head: ["Tipologia", "Quotas", "Prevista", "Recebida", "Dívida vencida"], rows: f.byTypology.map((t) => [t.label, t.quotas, formatKz(t.prevista), formatKz(t.recebida), formatKz(t.divida)]) },
       { title: "Despesas por categoria", head: ["Categoria", "Valor"], rows: f.expensesByCategory.map((c) => [c.label, formatKz(c.value)]) },
     ],
+  };
+}
+
+/** Resumo financeiro LIMITADO (Gestor Operacional): cobrança agregada, sem dívidas por fracção nem despesas detalhadas. */
+export function financialSummaryReport(f: Finance, period: string, author: string): ReportSpec {
+  return {
+    title: "Resumo Financeiro (consulta limitada)",
+    subtitle: "Cobrança das quotas trimestrais e comprovativos por validar",
+    period,
+    author,
+    fileName: `Resumo_Financeiro_${slug(period)}.pdf`,
+    kpis: [
+      { label: "Receita prevista", value: formatKz(f.expected) },
+      { label: "Receita recebida", value: formatKz(f.received) },
+      { label: "Taxa de cobrança", value: pct(f.collectionRate) },
+      { label: "Comprovativos por validar", value: String(f.analysisCount) },
+    ],
+    charts: [{ title: "Receitas previstas vs. recebidas por trimestre", categories: f.quarterly.map((q) => q.label), series: [{ label: "Prevista", values: f.quarterly.map((q) => q.prevista) }, { label: "Recebida", values: f.quarterly.map((q) => q.recebida) }], unit: "kz" }],
+    summary: [`Taxa de cobrança no período: ${pct(f.collectionRate)}. Comprovativos a aguardar validação: ${f.analysisCount}.`],
+    pending: f.analysisCount ? [`${f.analysisCount} comprovativos a aguardar validação.`] : [],
+    recommendations: [],
   };
 }
 

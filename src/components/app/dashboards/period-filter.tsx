@@ -1,7 +1,8 @@
 "use client";
 
 import { CalendarRange } from "lucide-react";
-import { BLOCKS } from "@/data/management";
+import { BLOCKS, TYPOLOGIES } from "@/data/management";
+import type { TypologyCode } from "@/types";
 import { Select } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
@@ -9,10 +10,11 @@ export interface PeriodValue {
   year: number;
   quarter: number; // 0 = ano completo
   block?: string;
+  typology?: TypologyCode;
 }
 
 /** Selector de período (ano + trimestre) e, opcionalmente, bloco. */
-export function PeriodFilter({ value, onChange, years, withBlock, className }: { value: PeriodValue; onChange: (v: PeriodValue) => void; years: number[]; withBlock?: boolean; className?: string }) {
+export function PeriodFilter({ value, onChange, years, withBlock, withTypology, className }: { value: PeriodValue; onChange: (v: PeriodValue) => void; years: number[]; withBlock?: boolean; withTypology?: boolean; className?: string }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-2 rounded-2xl border border-graphite-100 bg-white p-2 shadow-soft", className)}>
       <CalendarRange className="ml-2 h-4 w-4 text-gold-600" />
@@ -37,6 +39,16 @@ export function PeriodFilter({ value, onChange, years, withBlock, className }: {
           {BLOCKS.map((b) => (
             <option key={b} value={b}>
               Bloco {b}
+            </option>
+          ))}
+        </Select>
+      )}
+      {withTypology && (
+        <Select value={value.typology ?? ""} onChange={(e) => onChange({ ...value, typology: (e.target.value || undefined) as TypologyCode | undefined })} className="h-9 w-40" aria-label="Tipologia">
+          <option value="">Todas as tipologias</option>
+          {TYPOLOGIES.map((t) => (
+            <option key={t} value={t}>
+              {t}
             </option>
           ))}
         </Select>

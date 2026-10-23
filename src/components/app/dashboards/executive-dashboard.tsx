@@ -11,6 +11,8 @@ import {
   ClipboardCheck,
   Gauge,
   Landmark,
+  LogOut,
+  PartyPopper,
   Percent,
   Receipt,
   ShieldAlert,
@@ -25,7 +27,9 @@ import { useDemoStore } from "@/store/demo-store";
 import { CURRENT_PERIOD, useFinance } from "@/hooks/use-finance";
 import { useOperations } from "@/hooks/use-operations";
 import { BLOCKS } from "@/data/management";
-import { formatKz, parseQuarter } from "@/lib/utils";
+import { formatKz, parseQuarter, todayISO } from "@/lib/utils";
+
+const CURRENT_DATE = todayISO();
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DemoDataNote } from "@/components/ui/demo-badge";
@@ -47,6 +51,8 @@ export function ExecutiveDashboard({ session }: { session: Session }) {
   const [period, setPeriod] = useState<PeriodValue>({ year: cur.year, quarter: cur.quarter });
   const apartments = useDemoStore((s) => s.apartments);
   const residents = useDemoStore((s) => s.residents);
+  const reservations = useDemoStore((s) => s.reservations);
+  const moveOuts = useDemoStore((s) => s.moveOuts);
   const f = useFinance({ year: period.year, quarter: period.quarter || undefined });
   const prev = previousPeriod(period);
   const fPrev = useFinance({ year: prev.year, quarter: prev.quarter || undefined });
@@ -90,10 +96,18 @@ export function ExecutiveDashboard({ session }: { session: Session }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard index={4} label="Receita prevista" value={formatKz(f.expected)} icon={Receipt} hint="quotas trimestrais emitidas" />
         <StatCard index={5} highlight label="Receita recebida" value={formatKz(f.received)} icon={CircleDollarSign} trend={(() => { const v = cmp(f.received, fPrev.received); return v === null ? null : { value: v }; })()} hint="vs. período anterior" />
-        <StatCard index={6} label="Valor em dívida" value={formatKz(f.debt)} icon={AlertTriangle} tone="warning" hint={`${f.overdueCount} em atraso · ${f.pendingCount} pendentes`} />
+        <StatCard index={6} label="Dívidas vencidas" value={formatKz(f.overdue)} icon={AlertTriangle} tone="warning" hint={`${f.overdueCount} quotas · ${f.arrearsCount} apartamentos · por cobrar ${formatKz(f.pending)}`} />
         <StatCard index={7} label="Taxa de cobrança" value={`${(f.collectionRate * 100).toFixed(1)}%`} icon={Gauge} tone="success" trend={period.quarter && fPrev.collectionRate ? { value: (f.collectionRate - fPrev.collectionRate) * 100 } : null} hint="pontos percentuais" />
         <StatCard index={8} label="Despesas operacionais" value={formatKz(f.expensesTotal)} icon={Wallet} tone="danger" trend={(() => { const v = cmp(f.expensesTotal, fPrev.expensesTotal); return v === null ? null : { value: v, goodWhenUp: false }; })()} hint="vs. anterior" />
-        <StatCard index={9} label="Saldo financeiro" value={formatKz(f.result)} icon={Landmark} tone={f.result >= 0 ? "success" : "danger"} hint="recebido − despesas" />
+        <StatCard index={9} label="Saldo financeiro" value={formatKz(f.result)} icon={Landmark} tone={f.result >= 0 ? "success" : "danger"} hint="recebido + reservas − despesas" />
+      </div>
+
+      <h2 className="mt-6 mb-3 text-xs font-semibold tracking-[0.2em] text-graphite-400 uppercase">Comunidade e processos</h2>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard index={16} label="Pagamentos por validar" value={f.analysisCount} icon={Receipt} tone="gold" hint="Gestor Operacional / Financeiro" />
+        <StatCard index={17} label="Receita de reservas" value={formatKz(f.reservationRevenue)} icon={PartyPopper} tone="info" hint={`${reservations.filter((r) => r.status === "confirmada" && r.date >= CURRENT_DATE).length} eventos confirmados a realizar`} />
+        <StatCard index={18} label="Reservas por validar" value={reservations.filter((r) => r.status === "em_validacao" || r.status === "pendente_pagamento").length} icon={PartyPopper} tone="gold" hint="pagamento pendente ou em validação" />
+        <StatCard index={19} label="Desocupações em curso" value={moveOuts.filter((m) => !["concluida", "cancelada"].includes(m.status)).length} icon={LogOut} tone="navy" hint={`${moveOuts.filter((m) => m.status === "regularizacao_pendente").length} com regularização pendente`} />
       </div>
 
       <h2 className="mt-6 mb-3 text-xs font-semibold tracking-[0.2em] text-graphite-400 uppercase">Operacional</h2>
@@ -114,6 +128,21 @@ export function ExecutiveDashboard({ session }: { session: Session }) {
           </CardBody>
         </Card>
         <OpsAlerts />
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader title="Receita por tipologia" description={`T2 (300.000 Kz) e Duplex (600.000 Kz) por trimestre · ${label}`} />
+          <CardBody>
+            <GroupedBars data={f.byTypology} series={[{ key: "prevista", label: "Prevista" }, { key: "recebida", label: "Recebida" }, { key: "divida", label: "Dívida vencida" }]} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Dívidas por bloco" description={label} action={<Link href="/painel/conta-corrente" className="text-xs font-medium text-navy-700">Contas correntes</Link>} />
+          <CardBody>
+            <GroupedBars data={f.byBlock} series={[{ key: "divida", label: "Dívida vencida" }, { key: "porCobrar", label: "Por cobrar" }]} />
+          </CardBody>
+        </Card>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">

@@ -73,14 +73,14 @@ export const siteStats: SiteStat[] = [
   },
   {
     label: "Apartamentos",
-    value: null,
-    hint: "Número oficial a confirmar pela administração",
-    confirmed: false,
+    value: "100",
+    hint: "80 T2 e 20 Duplex, distribuídos pelos 10 blocos",
+    confirmed: true,
   },
   {
     label: "Tipologias",
-    value: "T2 · T3 · T4",
-    hint: "Tipologias existentes no condomínio",
+    value: "T2 · Duplex",
+    hint: "Exclusivamente T2 e Duplex (3 quartos, sala e varanda)",
     confirmed: true,
   },
 ];

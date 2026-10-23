@@ -21,7 +21,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Toolbar } from "@/components/ui/toolbar";
 import { Tabs } from "@/components/ui/tabs";
 import { Modal } from "@/components/ui/modal";
-import { StatusBadge, statusLabel } from "@/components/ui/status-badge";
+import { StatusBadge, statusLabel, occStatus } from "@/components/ui/status-badge";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { Donut, HBars } from "@/components/charts/charts";
 
@@ -177,7 +177,7 @@ export default function OcorrenciasPage() {
             { key: "prio", header: "Prioridade", cell: (o) => <StatusBadge status={o.priority} /> },
             { key: "resp", header: "Responsável", cell: (o) => o.assignee ?? <span className="text-graphite-400">Por atribuir</span>, hideOnMobile: true },
             { key: "date", header: "Registo", cell: (o) => formatDateTime(o.createdAt), hideOnMobile: true },
-            { key: "status", header: "Estado", cell: (o) => <StatusBadge status={o.status} /> },
+            { key: "status", header: "Estado", cell: (o) => <StatusBadge status={occStatus(o.status)} /> },
             {
               key: "actions",
               header: "",
@@ -392,7 +392,7 @@ function OccurrenceDetail({ occurrence: o, apartmentLabel, onClose }: { occurren
       {o && (
         <div className="space-y-5 text-sm">
           <div className="flex flex-wrap gap-2">
-            <StatusBadge status={o.status} />
+            <StatusBadge status={occStatus(o.status)} />
             <StatusBadge status={o.priority} />
             {o.elevatorId && <span className="rounded-full bg-navy-50 px-2.5 py-0.5 text-[11px] text-navy-800">Ligada ao elevador {o.elevatorId.replace("elv_", "Bloco ")}</span>}
           </div>

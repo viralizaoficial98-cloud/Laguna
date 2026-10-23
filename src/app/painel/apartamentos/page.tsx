@@ -28,7 +28,7 @@ import { IconBtn } from "@/components/ui/icon-button";
 const schema = z.object({
   block: z.string().regex(/^\d{2}$/, "Use 2 dígitos (ex.: 06)."),
   number: z.string().regex(/^\d{3}$/, "Use 3 dígitos (ex.: 201)."),
-  typology: z.enum(["", "T2", "T3", "T4"]),
+  typology: z.enum(["T2", "Duplex"]),
   floor: z.coerce.number<number>().int().min(0, "Piso inválido.").max(30, "Piso inválido."),
   status: z.enum(["ocupado", "disponivel", "manutencao"]),
   active: z.boolean(),
@@ -61,7 +61,7 @@ export default function ApartamentosPage() {
     () =>
       apartments
         .filter((a) => !block || a.block === block)
-        .filter((a) => !typology || (typology === "none" ? !a.typology : a.typology === typology))
+        .filter((a) => !typology || a.typology === typology)
         .filter((a) => (status === "inactivo" ? !a.active : status ? a.active && a.status === status : true))
         .filter((a) => includesText([formatApt(a), `${a.block}-${a.number}`, `${a.block}${a.number}`, a.number, a.ownerName, resName(a.residentId)], q))
         .sort((a, b) => (a.block + a.number).localeCompare(b.block + b.number)),
@@ -100,9 +100,9 @@ export default function ApartamentosPage() {
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 text-sm text-amber-900">
           <Info className="mt-0.5 h-5 w-5 shrink-0" />
           <p>
-            <strong>Cadastro provisório:</strong> {provisional} fracções foram criadas com base na numeração observada nos documentos da Administração
-            (Blocos 01 a 10, apartamentos 101 a 502). Não são unidades oficialmente confirmadas — valide cada fracção, corrija a numeração, defina a
-            tipologia (T2, T3 ou T4) e desactive as inexistentes.
+            <strong>Cadastro provisório:</strong> 10 blocos × 10 fracções = 100 apartamentos, com a proposta de 8 T2 + 2 Duplex por bloco (Duplex
+            assumidos nas fracções 501 e 502). {provisional} fracções aguardam validação — corrija a numeração ou a tipologia (T2 ou Duplex) se a
+            distribuição real for diferente. A quota é calculada pela tipologia: T2 = 300 000 Kz · Duplex = 600 000 Kz por trimestre.
           </p>
         </div>
       )}
@@ -125,6 +125,25 @@ export default function ApartamentosPage() {
           </button>
         ))}
       </div>
+      <div className="-mt-3 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {(["T2", "Duplex"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTypology(typology === t ? "" : t)}
+            className={cn("flex items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left shadow-soft", typology === t ? "border-navy-900 ring-2 ring-navy-100" : "border-graphite-100")}
+          >
+            <span>
+              <span className="block text-xs text-graphite-500">{t === "Duplex" ? "Duplex (3 quartos)" : "T2"}</span>
+              <span className="block text-xl font-semibold text-navy-900 tabular-nums">{active.filter((a) => a.typology === t).length}</span>
+            </span>
+            <Badge tone={t === "Duplex" ? "gold" : "navy"}>{t}</Badge>
+          </button>
+        ))}
+        <div className="col-span-2 rounded-2xl border border-graphite-100 bg-white px-4 py-3 text-xs text-graphite-600 shadow-soft sm:col-span-1">
+          <span className="block text-graphite-500">Blocos</span>
+          <span className="text-xl font-semibold text-navy-900">{new Set(active.map((a) => a.block)).size}</span> · {active.length} apartamentos
+        </div>
+      </div>
 
       <Card>
         <Toolbar>
@@ -143,7 +162,6 @@ export default function ApartamentosPage() {
               {TYPOLOGIES.map((t) => (
                 <option key={t}>{t}</option>
               ))}
-              <option value="none">Por definir</option>
             </Select>
             <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrar por estado" className="sm:w-40">
               <option value="">Estados</option>
@@ -179,7 +197,7 @@ export default function ApartamentosPage() {
                 </span>
               ),
             },
-            { key: "typology", header: "Tipologia", cell: (a) => (a.typology ? <span className="font-medium">{a.typology}</span> : <span className="text-xs text-graphite-400 italic">Por definir</span>) },
+            { key: "typology", header: "Tipologia", cell: (a) => <Badge tone={a.typology === "Duplex" ? "gold" : "navy"}>{a.typology}</Badge> },
             { key: "owner", header: "Proprietário", cell: (a) => a.ownerName || <span className="text-graphite-400">—</span> },
             { key: "resident", header: "Morador", cell: (a) => resName(a.residentId) ?? <span className="text-graphite-400">—</span>, hideOnMobile: true },
             {
@@ -254,7 +272,7 @@ export default function ApartamentosPage() {
               ["Bloco", viewing.block],
               ["Número", viewing.number],
               ["Piso", `${viewing.floor}.º`],
-              ["Tipologia", viewing.typology ?? "Por definir"],
+              ["Tipologia", viewing.typology === "Duplex" ? "Duplex (3 quartos, sala, varanda)" : "T2"],
               ["Estado", viewing.active ? <StatusBadge key="s" status={viewing.status} /> : "Desactivado"],
               ["Cadastro", viewing.provisional ? "Provisório (por validar)" : "Validado"],
               ["Proprietário", viewing.ownerName || "—"],
@@ -299,8 +317,8 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: apartment
-      ? { ...apartment, typology: apartment.typology ?? "", residentId: apartment.residentId ?? "", notes: apartment.notes ?? "" }
-      : { block: "01", number: "", typology: "", floor: 1, status: "disponivel", active: true, provisional: false, ownerName: "", residentId: "", notes: "" },
+      ? { ...apartment, residentId: apartment.residentId ?? "", notes: apartment.notes ?? "" }
+      : { block: "01", number: "", typology: "T2", floor: 1, status: "disponivel", active: true, provisional: false, ownerName: "", residentId: "", notes: "" },
   });
 
   const submit = (d: FormData) => {
@@ -315,7 +333,7 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
       block: d.block,
       number: d.number,
       floor: d.floor,
-      typology: d.typology || null,
+      typology: d.typology,
       status: d.status,
       active: d.active,
       provisional: d.provisional,
@@ -356,9 +374,8 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
         <Field label="Número do apartamento" required error={errors.number?.message} hint="Ex.: 101, 102, 201…">
           <Input {...register("number")} placeholder="201" invalid={!!errors.number} />
         </Field>
-        <Field label="Tipologia" hint="Apenas T2, T3 ou T4">
+        <Field label="Tipologia" hint="T2 = 300 000 Kz · Duplex = 600 000 Kz por trimestre (aplica-se às próximas quotas)">
           <Select {...register("typology")}>
-            <option value="">Por definir</option>
             {TYPOLOGIES.map((t) => (
               <option key={t}>{t}</option>
             ))}

@@ -1,11 +1,13 @@
 "use client";
 
-import { AlertTriangle, BellRing, Check, CircleDollarSign, Clock, Download, FileSearch, Hourglass, X } from "lucide-react";
+import { AlertTriangle, BellRing, Check, CircleDollarSign, Clock, Download, FileSearch, Hourglass, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Payment, Quota, QuotaStatus } from "@/types";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
+import { can } from "@/config/permissions";
+import { roleLabels } from "@/data/users";
 import { useFinance } from "@/hooks/use-finance";
 import { BLOCKS } from "@/data/management";
 import { downloadCsv, formatDate, formatKz, formatQuarter, includesText } from "@/lib/utils";
@@ -22,6 +24,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { IconBtn } from "@/components/ui/icon-button";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { METHOD_LABELS, ReviewPaymentModal } from "@/components/app/widgets/review-payment-modal";
+import { RegisterPaymentModal } from "@/components/app/widgets/register-payment-modal";
 
 type TabId = "todos" | QuotaStatus | "historico";
 
@@ -41,6 +44,8 @@ export default function PagamentosPage() {
   const [block, setBlock] = useState("");
   const [apt, setApt] = useState("");
   const [selected, setSelected] = useState<Payment | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const canRegister = can(session?.role, "payments.register");
 
   const years = useMemo(() => Array.from(new Set(quotas.map((x) => x.year))).sort().reverse(), [quotas]);
   const resOf = (aptId: string) => residents.find((r) => r.apartmentId === aptId)?.name ?? "—";
@@ -82,8 +87,12 @@ export default function PagamentosPage() {
   const quick = (quota: Quota) => {
     const p = paymentOf(quota);
     if (!p) return;
-    review(p.id, "aprovado", session?.name ?? "Administração");
-    toast.success(`Pagamento validado — ${aptLabel(apartments, quota.apartmentId)}`);
+    try {
+      review(p.id, "aprovado");
+      toast.success(`Pagamento validado — ${aptLabel(apartments, quota.apartmentId)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível validar.");
+    }
   };
 
   const exportCsv = () => {
@@ -113,16 +122,23 @@ export default function PagamentosPage() {
       <PageHeader
         eyebrow="Financeiro"
         title="Pagamentos e comprovativos"
-        description="Validação de comprovativos e consulta das quotas trimestrais por bloco, apartamento, trimestre e ano."
+        description="Validação de comprovativos (Gestor Operacional ou Gestor Financeiro — uma única decisão por comprovativo) e consulta das quotas trimestrais por bloco, apartamento, trimestre e ano."
         actions={
-          <Button variant="outline" onClick={exportCsv}>
-            <Download className="h-4 w-4" /> Exportar CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {canRegister && (
+              <Button onClick={() => setRegistering(true)}>
+                <Plus className="h-4 w-4" /> Registar pagamento
+              </Button>
+            )}
+            <Button variant="outline" onClick={exportCsv}>
+              <Download className="h-4 w-4" /> Exportar CSV
+            </Button>
+          </div>
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard index={0} highlight label="Total recebido" value={formatKz(f.received)} icon={CircleDollarSign} />
-        <StatCard index={1} label="Em análise" value={f.analysisCount} icon={Hourglass} tone="gold" hint={formatKz(f.analysis)} />
+        <StatCard index={1} label="Em validação" value={f.analysisCount} icon={Hourglass} tone="gold" hint={formatKz(f.analysis)} />
         <StatCard index={2} label="Pendente (no prazo)" value={formatKz(f.pending)} icon={Clock} tone="info" hint={`${f.pendingCount} quotas`} />
         <StatCard index={3} label="Em atraso" value={formatKz(f.overdue)} icon={AlertTriangle} tone="warning" hint={`${f.overdueCount} quotas`} />
       </div>
@@ -133,8 +149,9 @@ export default function PagamentosPage() {
             value={tab}
             onChange={setTab}
             tabs={[
-              { id: "em_analise", label: "Em análise", count: count("em_analise") },
+              { id: "em_analise", label: "Em validação", count: count("em_analise") },
               { id: "pendente", label: "Pendentes", count: count("pendente") },
+              { id: "parcial", label: "Parciais", count: count("parcial") },
               { id: "em_atraso", label: "Em atraso", count: count("em_atraso") },
               { id: "pago", label: "Pagas", count: count("pago") },
               { id: "todos", label: "Todas" },
@@ -187,6 +204,7 @@ export default function PagamentosPage() {
               { key: "date", header: "Pagamento", cell: (p) => formatDate(p.paidAt) },
               { key: "amount", header: "Valor", align: "right", cell: (p) => <span className="font-medium tabular-nums">{formatKz(p.amount)}</span> },
               { key: "status", header: "Comprovativo", cell: (p) => <StatusBadge status={p.status} /> },
+              { key: "by", header: "Decidido por", hideOnMobile: true, cell: (p) => (p.reviewedBy ? <span className="text-xs">{p.reviewedBy}{p.reviewedByRole ? <span className="block text-graphite-400">{roleLabels[p.reviewedByRole]}</span> : null}</span> : "—") },
             ]}
           />
         ) : (
@@ -204,7 +222,8 @@ export default function PagamentosPage() {
               { key: "period", header: "Trimestre", cell: (x) => `${x.quarter}.º Trim.` },
               { key: "year", header: "Ano", cell: (x) => x.year },
               { key: "due", header: "Data limite", cell: (x) => formatDate(x.dueDate), hideOnMobile: true },
-              { key: "amount", header: "Valor", align: "right", cell: (x) => <span className="font-medium tabular-nums">{formatKz(x.amount)}</span> },
+              { key: "typ", header: "Tipologia", cell: (x) => x.typology, hideOnMobile: true },
+              { key: "amount", header: "Valor", align: "right", cell: (x) => <span className="font-medium tabular-nums">{formatKz(x.amount)}{x.paidAmount > 0 && x.paidAmount < x.amount ? <span className="block text-[11px] text-graphite-500">pago {formatKz(x.paidAmount)}</span> : null}</span> },
               { key: "status", header: "Estado", cell: (x) => <StatusBadge status={x.status} /> },
               {
                 key: "actions",
@@ -240,6 +259,7 @@ export default function PagamentosPage() {
         )}
       </Card>
       <ReviewPaymentModal payment={selected} onClose={() => setSelected(null)} />
+      {canRegister && <RegisterPaymentModal open={registering} onClose={() => setRegistering(false)} />}
     </>
   );
 }

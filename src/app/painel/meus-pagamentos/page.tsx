@@ -45,7 +45,7 @@ export default function MeusPagamentosPage() {
           <div className="grid gap-6 md:grid-cols-2">
             <ol className="relative space-y-6 border-l border-graphite-200 pl-6">
               <TimelineItem done title="Comprovativo enviado" date={formatDateTime(sel.submittedAt)} />
-              <TimelineItem done={sel.status !== "em_analise"} active={sel.status === "em_analise"} title="Em análise pela Administração" date={sel.status === "em_analise" ? "A aguardar" : ""} />
+              <TimelineItem done={sel.status !== "em_analise"} active={sel.status === "em_analise"} title="Em validação (Gestor Operacional ou Gestor Financeiro)" date={sel.status === "em_analise" ? "A aguardar" : ""} />
               <TimelineItem
                 done={sel.status === "aprovado"}
                 error={sel.status === "rejeitado"}

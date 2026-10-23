@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PaymentMethod, PaymentProof, Quota } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
-import { cn, formatBytes, formatDate, formatKz, formatQuarter } from "@/lib/utils";
+import { cn, formatBytes, formatDate, formatKz, formatQuarter, todayISO } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
@@ -18,10 +18,13 @@ const MAX_SIZE = 5 * 1024 * 1024;
 
 export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | null; residentId?: string; onClose: () => void }) {
   const submitPayment = useDemoStore((s) => s.submitPayment);
+  const allowPartial = useDemoStore((s) => s.settings.allowPartial);
+  const [amount, setAmount] = useState("");
+  const remaining = quota ? quota.amount - quota.paidAmount : 0;
   const [step, setStep] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>("transferencia");
   const [reference, setReference] = useState("");
-  const [paidAt, setPaidAt] = useState("2026-10-18");
+  const [paidAt, setPaidAt] = useState(todayISO());
   const [proof, setProof] = useState<PaymentProof | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
@@ -30,6 +33,7 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
   const reset = () => {
     setStep(0);
     setReference("");
+    setAmount("");
     setProof(null);
     setError(null);
     onClose();
@@ -55,10 +59,19 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
       setError("Seleccione o comprovativo de pagamento.");
       return;
     }
+    if (step === 1 && amount && (Number(amount) <= 0 || Number(amount) > remaining || (!allowPartial && Number(amount) < remaining))) {
+      setError(allowPartial ? `Indique um valor entre 1 e ${formatKz(remaining)}.` : `Os pagamentos parciais não estão autorizados — valor a pagar: ${formatKz(remaining)}.`);
+      return;
+    }
     setError(null);
     if (step === 2 && quota) {
-      submitPayment({ quotaId: quota.id, apartmentId: quota.apartmentId, residentId, amount: quota.amount, method, reference: reference.trim(), paidAt: `${paidAt}T12:00:00`, proof: proof ?? undefined });
-      toast.success("Comprovativo enviado", { description: "O pagamento ficou em análise (demonstração)." });
+      try {
+        submitPayment({ quotaId: quota.id, apartmentId: quota.apartmentId, residentId, amount: amount ? Number(amount) : remaining, method, reference: reference.trim(), paidAt: `${paidAt}T12:00:00`, proof: proof ?? undefined });
+        toast.success("Comprovativo enviado", { description: "O pagamento ficou Em Validação (demonstração)." });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Não foi possível enviar o comprovativo.");
+        return;
+      }
     }
     setStep((s) => s + 1);
   };
@@ -102,8 +115,9 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
         <motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
           {quota && step === 0 && (
             <div className="rounded-2xl border border-graphite-100 bg-gradient-to-br from-navy-900 to-navy-800 p-6 text-white">
-              <p className="text-xs tracking-widest text-gold-300 uppercase">Quota trimestral a pagar</p>
-              <p className="mt-2 text-4xl font-semibold tabular-nums">{formatKz(quota.amount)}</p>
+              <p className="text-xs tracking-widest text-gold-300 uppercase">Quota trimestral a pagar · {quota.typology}</p>
+              <p className="mt-2 text-4xl font-semibold tabular-nums">{formatKz(remaining)}</p>
+              {quota.paidAmount > 0 && <p className="mt-1 text-xs text-navy-200">Quota de {formatKz(quota.amount)} · já pago {formatKz(quota.paidAmount)}</p>}
               <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-navy-200">Período</p>
@@ -129,11 +143,14 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
                   ))}
                 </Select>
               </Field>
+              <Field label="Valor pago (Kz)" hint={allowPartial ? `Em dívida: ${formatKz(remaining)} · pode pagar parcialmente.` : `Valor a pagar: ${formatKz(remaining)}.`}>
+                <Input type="number" name="amount" min={1} max={remaining} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={String(remaining)} disabled={!allowPartial} />
+              </Field>
               <Field label="Referência da transacção" hint="Opcional — pode enviar o comprovativo sem referência.">
                 <Input name="reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex.: TRF-123456 (opcional)" />
               </Field>
               <Field label="Data do pagamento" required>
-                <Input type="date" value={paidAt} max="2026-12-31" onChange={(e) => setPaidAt(e.target.value)} />
+                <Input type="date" value={paidAt} max={todayISO()} onChange={(e) => setPaidAt(e.target.value)} />
               </Field>
             </div>
           )}
@@ -186,7 +203,7 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
                 <CheckCircle2 className="h-9 w-9 text-emerald-600" />
               </motion.span>
               <p className="mt-4 font-display text-3xl text-navy-900">Comprovativo enviado</p>
-              <p className="mt-2 max-w-sm text-sm text-graphite-500">O seu pagamento está agora <strong>em análise</strong>. Será notificado(a) quando o Financeiro aprovar ou rejeitar o comprovativo.</p>
+              <p className="mt-2 max-w-sm text-sm text-graphite-500">O seu pagamento está agora <strong>Em Validação</strong>. O Gestor Operacional e o Gestor Financeiro foram notificados; será informado(a) da aprovação ou rejeição.</p>
             </div>
           )}
         </motion.div>

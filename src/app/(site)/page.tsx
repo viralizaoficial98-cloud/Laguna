@@ -135,14 +135,14 @@ export default async function HomePage() {
                 Tipologias para <em className="text-gold-600">cada família</em>
               </>
             }
-            description="Apartamentos T2, T3 e T4. Áreas e características detalhadas serão publicadas após confirmação pela Administração."
+            description="Apartamentos T2 e Duplex (3 quartos, sala e varanda). Áreas e características detalhadas serão publicadas após confirmação pela Administração."
             action={
               <Link href="/apartamentos" className={buttonClass("outline", "lg", "group")}>
                 Ver apartamentos <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
             }
           />
-          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-8 md:grid-cols-2">
             {typologies.map((t, i) => (
               <Reveal key={t.slug} delay={i * 0.1}>
                 <ApartmentCard typology={t} />

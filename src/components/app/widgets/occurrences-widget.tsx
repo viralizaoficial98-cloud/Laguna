@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useDemoStore } from "@/store/demo-store";
 import { formatDateTime } from "@/lib/utils";
 import { Card, CardHeader } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, occStatus } from "@/components/ui/status-badge";
 
 export function OccurrencesWidget({ limit = 5 }: { limit?: number }) {
   const occurrences = useDemoStore((s) => s.occurrences);
@@ -32,7 +32,7 @@ export function OccurrencesWidget({ limit = 5 }: { limit?: number }) {
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <StatusBadge status={o.status} />
+              <StatusBadge status={occStatus(o.status)} />
               <StatusBadge status={o.priority} className="opacity-80" />
             </div>
           </li>

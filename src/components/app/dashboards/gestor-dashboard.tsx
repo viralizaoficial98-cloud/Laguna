@@ -16,6 +16,8 @@ import { Donut, HBars, MultiLine } from "@/components/charts/charts";
 import { ElevatorGrid } from "@/components/app/widgets/elevator-grid";
 import { OpsAlerts } from "@/components/app/widgets/ops-alerts";
 import { Welcome } from "./welcome";
+import { PendingPayments } from "@/components/app/widgets/pending-payments";
+import { MoveOutQueue } from "@/components/app/widgets/moveout-queue";
 
 const AREA: Record<string, string> = { limpeza: "Limpeza", jardinagem: "Jardinagem", manutencao: "Manutenção" };
 
@@ -147,6 +149,10 @@ export function GestorDashboard({ session }: { session: Session }) {
           </ul>
         )}
       </Card>
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <PendingPayments />
+        <MoveOutQueue />
+      </div>
     </>
   );
 }

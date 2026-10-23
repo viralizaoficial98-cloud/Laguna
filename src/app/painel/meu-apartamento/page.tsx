@@ -13,7 +13,7 @@ import { AccountStatement } from "@/components/app/widgets/account-statement";
 
 export default function MeuApartamentoPage() {
   const { resident, apartment } = useCurrentResident();
-  const quarterly = useDemoStore((s) => s.settings.quarterlyQuota);
+  const quotaByTypology = useDemoStore((s) => s.settings.quotaByTypology);
   if (!apartment || !resident) return <p className="text-sm text-graphite-500">Sem apartamento associado.</p>;
 
   return (
@@ -31,9 +31,9 @@ export default function MeuApartamentoPage() {
           </div>
           <CardBody className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { icon: Building2, label: "Tipologia", value: apartment.typology ?? "Por definir" },
+              { icon: Building2, label: "Tipologia", value: apartment.typology === "Duplex" ? "Duplex · 3 quartos" : "T2" },
               { icon: Layers, label: "Andar", value: `${apartment.floor}.º` },
-              { icon: Ruler, label: "Quota trimestral", value: formatKz(quarterly) },
+              { icon: Ruler, label: "Quota trimestral", value: formatKz(quotaByTypology[apartment.typology]) },
               { icon: UserRound, label: "Proprietário", value: apartment.ownerName },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl bg-graphite-50 p-4">

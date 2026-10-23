@@ -8,7 +8,7 @@ import { CURRENT_PERIOD, useFinance } from "@/hooks/use-finance";
 import { useOperations } from "@/hooks/use-operations";
 import { can } from "@/config/permissions";
 import { formatDate, parseQuarter, todayISO } from "@/lib/utils";
-import { financialReport, operationalReport } from "@/lib/reports";
+import { financialReport, financialSummaryReport, operationalReport } from "@/lib/reports";
 import { downloadReportPdf, reportPdfUrl, type ReportSpec } from "@/lib/report-pdf";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,8 @@ function addDays(date: string, n: number) {
 export function PdfReports() {
   const session = useSession();
   const executive = can(session?.role, "reports.executive");
+  const financial = can(session?.role, "reports.financial");
+  const limited = !financial && can(session?.role, "reports.financial_limited");
   const operational = can(session?.role, "reports.operational");
   const cur = parseQuarter(CURRENT_PERIOD);
   const [period, setPeriod] = useState<PeriodValue>({ year: cur.year, quarter: cur.quarter });
@@ -75,24 +77,25 @@ export function PdfReports() {
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-      {executive && (
+      {(executive || financial || limited) && (
         <Card>
-          <CardHeader title="Relatórios executivos (PDF)" description="Identificação, período, indicadores, gráficos, resumo, pendências e recomendações" action={<FileBarChart className="h-5 w-5 text-gold-600" />} />
+          <CardHeader title={executive ? "Relatórios executivos (PDF)" : limited ? "Resumo financeiro (PDF · consulta limitada)" : "Relatórios financeiros (PDF)"} description="Identificação, período, indicadores, gráficos, resumo, pendências e recomendações" action={<FileBarChart className="h-5 w-5 text-gold-600" />} />
           <CardBody className="space-y-4">
             <PeriodFilter value={period} onChange={setPeriod} years={f.years} withBlock />
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-graphite-100 p-4">
-                <p className="font-semibold text-navy-900">Relatório financeiro</p>
-                <p className="mt-1 text-xs text-graphite-500">Receitas, cobrança, dívida por bloco, despesas e resultado.</p>
+                <p className="font-semibold text-navy-900">{limited ? "Resumo financeiro" : "Relatório financeiro"}</p>
+                <p className="mt-1 text-xs text-graphite-500">{limited ? "Cobrança agregada e comprovativos por validar." : "Receitas, cobrança, dívidas, tipologias, reservas, despesas e resultado."}</p>
                 <div className="mt-3 flex gap-2">
-                  <Button size="sm" variant="outline" loading={busy} onClick={() => open(financialReport(f, periodTxt, author))}>
+                  <Button size="sm" variant="outline" loading={busy} onClick={() => open((limited ? financialSummaryReport : financialReport)(f, periodTxt, author))}>
                     <Eye className="h-3.5 w-3.5" /> Ver
                   </Button>
-                  <Button size="sm" onClick={() => void downloadReportPdf(financialReport(f, periodTxt, author))}>
+                  <Button size="sm" onClick={() => void downloadReportPdf((limited ? financialSummaryReport : financialReport)(f, periodTxt, author))}>
                     <Download className="h-3.5 w-3.5" /> PDF
                   </Button>
                 </div>
               </div>
+              {executive && (
               <div className="rounded-2xl border border-graphite-100 p-4">
                 <p className="font-semibold text-navy-900">Relatório operacional</p>
                 <p className="mt-1 text-xs text-graphite-500">Elevadores, ocorrências, serviços, manutenção e equipas.</p>
@@ -105,6 +108,7 @@ export function PdfReports() {
                   </Button>
                 </div>
               </div>
+              )}
             </div>
           </CardBody>
         </Card>

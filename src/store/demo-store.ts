@@ -16,6 +16,16 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AccessLog,
   Apartment,
+  AuditEntry,
+  Charge,
+  Guest,
+  Hall,
+  MoveOut,
+  MoveOutStatus,
+  Occupancy,
+  PaymentProof,
+  Reservation,
+  ReservationStatus,
   AppNotification,
   Circular,
   CondoDocument,
@@ -48,9 +58,11 @@ import {
   seedVisits,
 } from "@/data/management";
 import { seedElevators, seedExpenses, seedOccurrences, seedOpsTasks } from "@/data/operations";
+import { createSeedMoveOuts, createSeedOccupancies, createSeedReservations, newChecklist, seedHalls } from "@/data/community";
+import { computeAccount, quotaStatusFrom } from "@/lib/account";
 import { can, PermissionError, type Permission } from "@/config/permissions";
 import { useAuthStore } from "@/store/auth-store";
-import { parseQuarter, todayISO, uid } from "@/lib/utils";
+import { parseQuarter, quarterOf, todayISO, uid } from "@/lib/utils";
 
 interface DemoData {
   settings: CondoSettings;
@@ -69,7 +81,17 @@ interface DemoData {
   accessLogs: AccessLog[];
   documents: CondoDocument[];
   notifications: AppNotification[];
+  halls: Hall[];
+  reservations: Reservation[];
+  charges: Charge[];
+  occupancies: Occupancy[];
+  moveOuts: MoveOut[];
+  audit: AuditEntry[];
 }
+
+export const RESERVATION_CONFLICT_MSG = "Este salão já se encontra reservado para a data seleccionada. Por favor, escolha outra data disponível.";
+/** Estados que ocupam a data de um salão (exclusividade por salão + data). */
+export const BLOCKING_RESERVATION: ReservationStatus[] = ["pendente_pagamento", "em_validacao", "confirmada"];
 
 interface DemoActions {
   saveApartment: (apt: Apartment) => void;
@@ -80,7 +102,28 @@ interface DemoActions {
   /** Emite as quotas de um trimestre para todas as fracções activas ocupadas. Devolve o n.º emitido. */
   emitQuotas: (period: string) => number;
   submitPayment: (input: Omit<Payment, "id" | "status" | "submittedAt">) => Payment;
-  reviewPayment: (paymentId: string, decision: "aprovado" | "rejeitado", reviewer: string, note?: string) => void;
+  /** Decisão ÚNICA sobre um comprovativo (Nelson, Saraiva ou José). Lança erro se já tiver sido decidido. */
+  reviewPayment: (paymentId: string, decision: "aprovado" | "rejeitado", opts?: { note?: string; validatedAmount?: number }) => void;
+  /** Gestor Financeiro: regista um pagamento recebido (ex.: numerário), já validado. */
+  registerPayment: (input: { quotaId: string; amount: number; method: Payment["method"]; reference: string; paidAt: string; note?: string }) => Payment;
+  addExpense: (e: Omit<Expense, "id" | "period">) => void;
+  deleteExpense: (id: string) => void;
+  saveHall: (h: Hall) => void;
+  requestReservation: (input: Pick<Reservation, "hallId" | "date" | "startTime" | "endTime" | "eventType" | "eventName" | "expectedGuests" | "guests" | "notes">, opts?: { waitlist?: boolean }) => Reservation;
+  submitReservationPayment: (id: string, input: { reference: string; proof?: PaymentProof }) => void;
+  reviewReservationPayment: (id: string, decision: "aprovado" | "rejeitado", note?: string) => void;
+  cancelReservation: (id: string, reason?: string) => void;
+  updateReservationGuests: (id: string, guests: Guest[]) => void;
+  /** Expira reservas provisórias não pagas e promove pedidos em espera. Devolve o n.º expirado. */
+  expireReservations: () => number;
+  proposeCharge: (c: Pick<Charge, "apartmentId" | "description" | "justification" | "amount" | "moveOutId">) => void;
+  decideCharge: (id: string, decision: "confirmado" | "anulado" | "pago") => void;
+  requestMoveOut: (input: { plannedDate: string; reason?: string; contact: string; notes?: string }) => MoveOut;
+  runFinancialCheck: (id: string, notes?: string) => void;
+  saveOperationalCheck: (id: string, input: { checklist: MoveOut["operational"]["checklist"]; notes?: string; report?: MoveOut["operational"]["report"]; conclude?: boolean }) => void;
+  authorizeMoveOut: (id: string, notes?: string) => void;
+  completeMoveOut: (id: string) => void;
+  cancelMoveOut: (id: string, reason?: string) => void;
   saveCircular: (c: Circular) => void;
   deleteCircular: (id: string) => void;
   saveNotice: (n: InternalNotice) => void;
@@ -123,7 +166,22 @@ function initialData(): DemoData {
     accessLogs: seedAccessLogs,
     documents: seedDocuments,
     notifications: seedNotifications,
+    halls: seedHalls,
+    reservations: createSeedReservations(),
+    charges: [],
+    occupancies: [],
+    moveOuts: [],
+    audit: [],
   };
+}
+
+function initialAll(): DemoData {
+  const d = initialData();
+  return { ...d, occupancies: createSeedOccupancies(d.residents), moveOuts: createSeedMoveOuts(d.residents) };
+}
+
+function addH(date: Date, hours: number) {
+  return new Date(date.getTime() + hours * 3600 * 1000).toISOString();
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T) {
@@ -138,6 +196,21 @@ function session() {
 /** Verificação de permissão ao nível da operação (não apenas da interface). */
 function assertCan(permission: Permission) {
   if (!can(session()?.role, permission)) throw new PermissionError(permission);
+}
+
+function audit(action: string, entity: string, entityId: string, details?: string): AuditEntry {
+  const sess = session();
+  return { id: uid("aud"), at: new Date().toISOString(), by: sess?.name ?? "Sistema", role: sess?.role ?? "administrador", action, entity, entityId, details };
+}
+
+function notif(title: string, body: string, roles: AppNotification["roles"], href?: string): AppNotification {
+  return { id: uid("ntf"), title, body, at: new Date().toISOString(), read: false, roles, href };
+}
+
+let receiptSeq = 0;
+function receiptNumber(prefix = "REC") {
+  receiptSeq += 1;
+  return `${prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}${receiptSeq}`;
 }
 
 /** Estado de uma quota não paga em função da data limite. */
@@ -181,7 +254,7 @@ const safeStorage = createJSONStorage(() => ({
 export const useDemoStore = create<DemoData & DemoActions>()(
   persist(
     (set, get) => ({
-      ...initialData(),
+      ...initialAll(),
 
       saveApartment: (apt) => {
         assertCan("apartments.manage");
@@ -223,8 +296,10 @@ export const useDemoStore = create<DemoData & DemoActions>()(
       },
 
       updateSettings: (patch) => {
-        assertCan("quotas.manage");
-        set((s) => ({ settings: { ...s.settings, ...patch } }));
+        // valores da reserva: Administração · quotas: Administração / Gestor Financeiro
+        if ("reservationFee" in patch || "reservationHoldHours" in patch) assertCan("halls.manage");
+        if ("quotaByTypology" in patch || "dueDay" in patch || "allowPartial" in patch) assertCan("quotas.manage");
+        set((s) => ({ settings: { ...s.settings, ...patch }, audit: [audit("Configuração actualizada", "settings", "settings", JSON.stringify(patch)), ...s.audit] }));
       },
 
       emitQuotas: (period) => {
@@ -233,8 +308,9 @@ export const useDemoStore = create<DemoData & DemoActions>()(
         const { year, quarter } = parseQuarter(period);
         const existing = new Set(s.quotas.filter((q) => q.period === period).map((q) => q.apartmentId));
         const dueDate = quotaDueDate(period, s.settings.dueDay);
+        // uma quota por fracção e por trimestre (sem cobrança duplicada); valor pela tipologia da fracção
         const created: Quota[] = s.apartments
-          .filter((a) => a.active && a.status === "ocupado" && !existing.has(a.id))
+          .filter((a) => a.active && !existing.has(a.id))
           .map((a) => ({
             id: `quo_${a.id}_${period}`,
             apartmentId: a.id,
@@ -242,61 +318,414 @@ export const useDemoStore = create<DemoData & DemoActions>()(
             year,
             quarter,
             description: quotaDescription(period),
-            amount: s.settings.quarterlyQuota,
+            amount: s.settings.quotaByTypology[a.typology],
+            typology: a.typology,
+            paidAmount: 0,
             dueDate,
             status: unpaidStatus({ dueDate }),
           }));
-        set({ quotas: [...s.quotas, ...created] });
+        set({ quotas: [...s.quotas, ...created], audit: [audit("Quotas emitidas", "quota", period, `${created.length} quotas`), ...s.audit] });
         return created.length;
       },
 
       submitPayment: (input) => {
         assertCan("payments.submit");
+        const sess = session()!;
+        const s = get();
+        const resident = s.residents.find((r) => r.id === sess.residentId);
+        const quota = s.quotas.find((q) => q.id === input.quotaId);
+        if (!quota || quota.apartmentId !== resident?.apartmentId) throw new PermissionError("payments.submit");
+        if (quota.status === "pago") throw new Error("Esta quota já se encontra paga.");
+        if (s.payments.some((p) => p.quotaId === quota.id && p.status === "em_analise")) throw new Error("Já existe um comprovativo em validação para esta quota.");
+        const remaining = quota.amount - quota.paidAmount;
+        if (input.amount <= 0 || input.amount > remaining) throw new Error(`Valor inválido. Montante em dívida: ${remaining.toLocaleString("pt-AO")} Kz.`);
+        if (input.amount < remaining && !s.settings.allowPartial) throw new Error("Os pagamentos parciais não estão autorizados.");
         const payment: Payment = { ...input, id: uid("pay"), status: "em_analise", submittedAt: new Date().toISOString() };
-        set((s) => ({
-          payments: [payment, ...s.payments.filter((p) => p.quotaId !== input.quotaId || p.status === "aprovado")],
+        const apt = s.apartments.find((a) => a.id === quota.apartmentId);
+        set({
+          payments: [payment, ...s.payments],
           quotas: s.quotas.map((q) => (q.id === input.quotaId ? { ...q, status: "em_analise", paymentId: payment.id } : q)),
           notifications: [
-            {
-              id: uid("ntf"),
-              title: "Novo comprovativo submetido",
-              body: `Pagamento${input.reference ? ` ${input.reference}` : " (sem referência)"} aguarda validação.`,
-              at: new Date().toISOString(),
-              read: false,
-              roles: ["administrador"],
-              href: "/painel/pagamentos",
-            },
+            notif(
+              "Comprovativo para validação",
+              `${sess.name} · Bloco ${apt?.block} · ${apt?.number} (${apt?.typology}) · ${quota.description} · ${input.amount.toLocaleString("pt-AO")} Kz${input.reference ? ` · ${input.reference}` : ""}`,
+              ["gestor", "financeiro"],
+              "/painel/pagamentos",
+            ),
             ...s.notifications,
           ],
-        }));
+          audit: [audit("Comprovativo submetido", "payment", payment.id, `${quota.description} · ${input.amount} Kz`), ...s.audit],
+        });
         return payment;
       },
 
-      reviewPayment: (paymentId, decision, reviewer, note) => {
+      reviewPayment: (paymentId, decision, opts = {}) => {
         assertCan("payments.review");
-        set((s) => {
-          const payment = s.payments.find((p) => p.id === paymentId);
-          if (!payment) return {};
-          const quota = s.quotas.find((q) => q.id === payment.quotaId);
-          return {
-            payments: s.payments.map((p) =>
-              p.id === paymentId ? { ...p, status: decision, reviewedBy: reviewer, reviewedAt: new Date().toISOString(), note } : p,
+        const sess = session()!;
+        const s = get();
+        const payment = s.payments.find((p) => p.id === paymentId);
+        if (!payment) throw new Error("Pagamento inexistente.");
+        // uma única decisão final por comprovativo — impede aprovações duplicadas ou contraditórias
+        if (payment.status !== "em_analise")
+          throw new Error(`Este comprovativo já foi ${payment.status === "aprovado" ? "aprovado" : "rejeitado"} por ${payment.reviewedBy ?? "outro responsável"}${payment.reviewedAt ? ` em ${new Date(payment.reviewedAt).toLocaleString("pt-PT")}` : ""}.`);
+        if (decision === "rejeitado" && !opts.note?.trim()) throw new Error("Indique a justificação da rejeição.");
+        const quota = s.quotas.find((q) => q.id === payment.quotaId)!;
+        const validated = decision === "aprovado" ? (opts.validatedAmount ?? payment.amount) : undefined;
+        if (validated !== undefined) {
+          if (validated <= 0 || validated > quota.amount - quota.paidAmount) throw new Error("Valor validado inválido.");
+          if (validated < quota.amount - quota.paidAmount && !s.settings.allowPartial) throw new Error("Os pagamentos parciais não estão autorizados.");
+        }
+        const now = new Date().toISOString();
+        const updated: Payment = {
+          ...payment,
+          status: decision,
+          reviewedBy: sess.name,
+          reviewedByRole: sess.role,
+          reviewedAt: now,
+          note: opts.note?.trim() || undefined,
+          validatedAmount: validated,
+          receiptNumber: decision === "aprovado" ? receiptNumber() : undefined,
+        };
+        const payments = s.payments.map((p) => (p.id === paymentId ? updated : p));
+        const recomputed = quotaStatusFrom(quota, payments.filter((p) => p.quotaId === quota.id));
+        set({
+          payments,
+          quotas: s.quotas.map((q) => (q.id === quota.id ? { ...q, ...recomputed } : q)),
+          notifications: [
+            notif(
+              decision === "aprovado" ? (recomputed.status === "parcial" ? "Pagamento parcialmente validado" : "Pagamento aprovado") : "Comprovativo rejeitado",
+              `${quota.description} — ${decision === "aprovado" ? `${validated!.toLocaleString("pt-AO")} Kz validados por ${sess.name}.` : opts.note}`,
+              ["morador"],
+              "/painel/minhas-quotas",
             ),
-            // rejeitado → a quota volta a Pendente / Em atraso, mantendo o histórico do comprovativo
-            quotas: s.quotas.map((q) => (q.id === payment.quotaId ? { ...q, status: decision === "aprovado" ? "pago" : unpaidStatus(q) } : q)),
-            notifications: [
-              {
-                id: uid("ntf"),
-                title: decision === "aprovado" ? "Pagamento validado" : "Comprovativo rejeitado",
-                body: `${quota?.description ?? "Quota"} — ${decision === "aprovado" ? "pagamento confirmado pela Administração." : note || "verifique o comprovativo."}`,
-                at: new Date().toISOString(),
-                read: false,
-                roles: ["morador"],
-                href: "/painel/minhas-quotas",
-              },
-              ...s.notifications,
-            ],
-          };
+            notif(`Comprovativo ${decision === "aprovado" ? "aprovado" : "rejeitado"} por ${sess.name}`, quota.description, ["gestor", "financeiro"].filter((r) => r !== sess.role) as AppNotification["roles"], "/painel/pagamentos"),
+            ...s.notifications,
+          ],
+          audit: [audit(decision === "aprovado" ? "Pagamento aprovado" : "Pagamento rejeitado", "payment", paymentId, `${validated ?? 0} Kz · comprovativo ${payment.proof?.name ?? "—"}${opts.note ? ` · ${opts.note}` : ""}`), ...s.audit],
+        });
+      },
+
+      registerPayment: (input) => {
+        assertCan("payments.register");
+        const sess = session()!;
+        const s = get();
+        const quota = s.quotas.find((q) => q.id === input.quotaId);
+        if (!quota) throw new Error("Quota inexistente.");
+        if (s.payments.some((p) => p.quotaId === quota.id && p.status === "em_analise")) throw new Error("Existe um comprovativo em validação para esta quota — decida-o primeiro.");
+        const remaining = quota.amount - quota.paidAmount;
+        if (input.amount <= 0 || input.amount > remaining) throw new Error(`Valor inválido. Montante em dívida: ${remaining.toLocaleString("pt-AO")} Kz.`);
+        if (input.amount < remaining && !s.settings.allowPartial) throw new Error("Os pagamentos parciais não estão autorizados.");
+        const now = new Date().toISOString();
+        const apt = s.apartments.find((a) => a.id === quota.apartmentId);
+        const payment: Payment = {
+          id: uid("pay"),
+          quotaId: quota.id,
+          apartmentId: quota.apartmentId,
+          residentId: apt?.residentId,
+          amount: input.amount,
+          method: input.method,
+          reference: input.reference,
+          paidAt: `${input.paidAt}T12:00:00`,
+          submittedAt: now,
+          status: "aprovado",
+          reviewedBy: sess.name,
+          reviewedByRole: sess.role,
+          reviewedAt: now,
+          validatedAmount: input.amount,
+          registeredBy: sess.name,
+          note: input.note,
+          receiptNumber: receiptNumber(),
+        };
+        const payments = [payment, ...s.payments];
+        set({
+          payments,
+          quotas: s.quotas.map((q) => (q.id === quota.id ? { ...q, ...quotaStatusFrom(q, payments.filter((p) => p.quotaId === q.id)), paymentId: payment.id } : q)),
+          audit: [audit("Pagamento registado", "payment", payment.id, `${quota.description} · ${input.amount} Kz · ${input.method}`), ...s.audit],
+        });
+        return payment;
+      },
+
+      addExpense: (e) => {
+        assertCan("expenses.manage");
+        const exp: Expense = { ...e, id: uid("exp"), period: quarterOf(e.date) };
+        set((s) => ({ expenses: [exp, ...s.expenses], audit: [audit("Despesa registada", "expense", exp.id, `${e.category} · ${e.amount} Kz`), ...s.audit] }));
+      },
+      deleteExpense: (id) => {
+        assertCan("expenses.manage");
+        set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id), audit: [audit("Despesa eliminada", "expense", id), ...s.audit] }));
+      },
+
+      saveHall: (h) => {
+        assertCan("halls.manage");
+        set((s) => ({ halls: upsert(s.halls, h) }));
+      },
+
+      requestReservation: (input, opts = {}) => {
+        assertCan("reservations.request");
+        get().expireReservations();
+        const sess = session()!;
+        const s = get();
+        const resident = s.residents.find((r) => r.id === sess.residentId);
+        if (!resident?.apartmentId) throw new PermissionError("reservations.request");
+        const hall = s.halls.find((h) => h.id === input.hallId && h.active);
+        if (!hall) throw new Error("Salão indisponível.");
+        if (input.date <= todayISO()) throw new Error("Escolha uma data futura.");
+        const holder = s.reservations.find((r) => r.hallId === input.hallId && r.date === input.date && BLOCKING_RESERVATION.includes(r.status));
+        if (holder && !opts.waitlist) throw new Error(RESERVATION_CONFLICT_MSG);
+        if (holder?.status === "confirmada") throw new Error(RESERVATION_CONFLICT_MSG);
+        if (s.reservations.some((r) => r.residentId === resident.id && r.hallId === input.hallId && r.date === input.date && (BLOCKING_RESERVATION.includes(r.status) || r.status === "em_espera")))
+          throw new Error("Já tem um pedido para este salão nesta data.");
+        const now = new Date();
+        const status: ReservationStatus = holder ? "em_espera" : "pendente_pagamento";
+        const res: Reservation = {
+          ...input,
+          id: uid("rsv"),
+          residentId: resident.id,
+          apartmentId: resident.apartmentId,
+          fee: s.settings.reservationFee,
+          status,
+          createdAt: now.toISOString(),
+          expiresAt: status === "pendente_pagamento" ? addH(now, s.settings.reservationHoldHours) : undefined,
+          history: [{ id: uid("rh"), at: now.toISOString(), by: sess.name, text: status === "em_espera" ? "Pedido em lista de espera." : "Pedido de reserva — data bloqueada provisoriamente até ao pagamento.", status }],
+        };
+        set({
+          reservations: [res, ...s.reservations],
+          notifications: [notif("Novo pedido de reserva", `${hall.name} · ${input.date} · ${input.eventName}`, ["financeiro"], "/painel/reservas"), ...s.notifications],
+          audit: [audit("Reserva solicitada", "reservation", res.id, `${hall.name} · ${input.date} · ${status}`), ...s.audit],
+        });
+        return res;
+      },
+
+      submitReservationPayment: (id, input) => {
+        assertCan("reservations.request");
+        const sess = session()!;
+        const s = get();
+        const r = s.reservations.find((x) => x.id === id);
+        if (!r || r.residentId !== sess.residentId) throw new PermissionError("reservations.request");
+        if (r.status !== "pendente_pagamento") throw new Error("Esta reserva não está a aguardar pagamento.");
+        const now = new Date().toISOString();
+        set({
+          reservations: s.reservations.map((x) =>
+            x.id === id ? { ...x, status: "em_validacao", payment: { reference: input.reference, proof: input.proof, submittedAt: now }, history: [...x.history, { id: uid("rh"), at: now, by: sess.name, text: "Comprovativo de pagamento enviado.", status: "em_validacao" }] } : x,
+          ),
+          notifications: [notif("Pagamento de reserva para validação", `${r.eventName} · ${r.date} · ${r.fee.toLocaleString("pt-AO")} Kz`, ["financeiro"], "/painel/reservas"), ...s.notifications],
+          audit: [audit("Pagamento de reserva submetido", "reservation", id), ...s.audit],
+        });
+      },
+
+      reviewReservationPayment: (id, decision, note) => {
+        assertCan("reservations.validate");
+        const sess = session()!;
+        const s = get();
+        const r = s.reservations.find((x) => x.id === id);
+        if (!r) throw new Error("Reserva inexistente.");
+        if (r.status !== "em_validacao") throw new Error("Este pagamento já foi decidido.");
+        if (decision === "rejeitado" && !note?.trim()) throw new Error("Indique a justificação da rejeição.");
+        const now = new Date();
+        const status: ReservationStatus = decision === "aprovado" ? "confirmada" : "pendente_pagamento";
+        set({
+          reservations: s.reservations.map((x) =>
+            x.id === id
+              ? {
+                  ...x,
+                  status,
+                  expiresAt: status === "pendente_pagamento" ? addH(now, s.settings.reservationHoldHours) : undefined,
+                  payment: { ...x.payment!, reviewedBy: sess.name, reviewedAt: now.toISOString(), note, receiptNumber: decision === "aprovado" ? receiptNumber("REC-RES") : undefined },
+                  history: [...x.history, { id: uid("rh"), at: now.toISOString(), by: sess.name, text: decision === "aprovado" ? "Pagamento validado — reserva confirmada." : `Comprovativo rejeitado: ${note}`, status }],
+                }
+              : x,
+          ),
+          notifications: [notif(decision === "aprovado" ? "Reserva confirmada" : "Pagamento da reserva rejeitado", `${r.eventName} · ${r.date}${note ? ` — ${note}` : ""}`, ["morador"], "/painel/reservas"), ...s.notifications],
+          audit: [audit(decision === "aprovado" ? "Reserva confirmada" : "Pagamento de reserva rejeitado", "reservation", id, note), ...s.audit],
+        });
+      },
+
+      cancelReservation: (id, reason) => {
+        const sess = session()!;
+        const s = get();
+        const r = s.reservations.find((x) => x.id === id);
+        if (!r) throw new Error("Reserva inexistente.");
+        const own = sess.role === "morador" && r.residentId === sess.residentId;
+        if (!own && !can(sess.role, "reservations.validate") && sess.role !== "administrador") throw new PermissionError("reservations.validate");
+        if (r.status === "cancelada" || r.status === "expirada") return;
+        const now = new Date();
+        let reservations = s.reservations.map((x) => (x.id === id ? { ...x, status: "cancelada" as const, history: [...x.history, { id: uid("rh"), at: now.toISOString(), by: sess.name, text: `Reserva cancelada${reason ? `: ${reason}` : ""}.`, status: "cancelada" as const }] } : x));
+        reservations = promoteWaitlist(reservations, r.hallId, r.date, s.settings.reservationHoldHours);
+        set({ reservations, audit: [audit("Reserva cancelada", "reservation", id, reason), ...s.audit] });
+      },
+
+      updateReservationGuests: (id, guests) => {
+        const sess = session()!;
+        const r = get().reservations.find((x) => x.id === id);
+        if (!r || sess.role !== "morador" || r.residentId !== sess.residentId) throw new PermissionError("reservations.request");
+        set((s) => ({ reservations: s.reservations.map((x) => (x.id === id ? { ...x, guests } : x)) }));
+      },
+
+      expireReservations: () => {
+        const s = get();
+        const now = new Date();
+        const expired = s.reservations.filter((r) => r.status === "pendente_pagamento" && r.expiresAt && new Date(r.expiresAt) < now);
+        if (!expired.length) return 0;
+        let reservations = s.reservations.map((r) =>
+          expired.some((e) => e.id === r.id) ? { ...r, status: "expirada" as const, history: [...r.history, { id: uid("rh"), at: now.toISOString(), by: "Sistema", text: "Reserva provisória expirada por falta de pagamento.", status: "expirada" as const }] } : r,
+        );
+        expired.forEach((e) => (reservations = promoteWaitlist(reservations, e.hallId, e.date, s.settings.reservationHoldHours)));
+        set({ reservations, audit: [...expired.map((e) => ({ ...audit("Reserva expirada", "reservation", e.id), by: "Sistema" })), ...s.audit] });
+        return expired.length;
+      },
+
+      proposeCharge: (c) => {
+        assertCan("charges.propose");
+        if (!c.justification.trim() || c.amount <= 0) throw new Error("O encargo exige fundamentação e valor.");
+        const sess = session()!;
+        const charge: Charge = { ...c, id: uid("chg"), date: todayISO(), status: "proposto", proposedBy: sess.name };
+        set((s) => ({
+          charges: [charge, ...s.charges],
+          notifications: [notif("Encargo proposto para validação", `${c.description} · ${c.amount.toLocaleString("pt-AO")} Kz`, ["administrador"], "/painel/desocupacao"), ...s.notifications],
+          audit: [audit("Encargo proposto", "charge", charge.id, `${c.amount} Kz · ${c.justification}`), ...s.audit],
+        }));
+      },
+
+      decideCharge: (id, decision) => {
+        // confirmar/anular: validação administrativa · liquidar: Gestor Financeiro
+        assertCan(decision === "pago" ? "payments.register" : "charges.confirm");
+        const sess = session()!;
+        set((s) => ({
+          charges: s.charges.map((c) => (c.id === id ? { ...c, status: decision, confirmedBy: decision === "confirmado" ? sess.name : c.confirmedBy } : c)),
+          audit: [audit(`Encargo ${decision}`, "charge", id), ...s.audit],
+        }));
+      },
+
+      requestMoveOut: (input) => {
+        assertCan("moveout.request");
+        const sess = session()!;
+        const s = get();
+        const resident = s.residents.find((r) => r.id === sess.residentId);
+        const apt = s.apartments.find((a) => a.id === resident?.apartmentId);
+        if (!resident || !apt) throw new PermissionError("moveout.request");
+        if (s.moveOuts.some((m) => m.residentId === resident.id && !["concluida", "cancelada"].includes(m.status))) throw new Error("Já existe um processo de desocupação em curso.");
+        if (!input.plannedDate || input.plannedDate < todayISO()) throw new Error("Indique uma data prevista de saída válida.");
+        const year = todayISO().slice(0, 4);
+        const seq = s.moveOuts.filter((m) => m.reference.includes(`-${year}-`)).length + 1;
+        const now = new Date().toISOString();
+        const mo: MoveOut = {
+          id: uid("mov"),
+          reference: `DES-${year}-${String(seq).padStart(3, "0")}`,
+          residentId: resident.id,
+          residentName: resident.name,
+          apartmentId: apt.id,
+          block: apt.block,
+          number: apt.number,
+          typology: apt.typology,
+          plannedDate: input.plannedDate,
+          reason: input.reason,
+          contact: input.contact,
+          notes: input.notes,
+          status: "solicitacao_recebida",
+          createdAt: now,
+          financial: { status: "pendente" },
+          operational: { status: "pendente", checklist: newChecklist() },
+          history: [{ id: uid("mh"), at: now, by: resident.name, text: "Solicitação de desocupação submetida.", status: "solicitacao_recebida" }],
+        };
+        set({
+          moveOuts: [mo, ...s.moveOuts],
+          notifications: [notif(`Solicitação de desocupação ${mo.reference}`, `${resident.name} · Bloco ${apt.block} · ${apt.number} · saída prevista ${input.plannedDate}`, ["gestor", "financeiro", "administrador"], "/painel/desocupacao"), ...s.notifications],
+          audit: [audit("Desocupação solicitada", "moveout", mo.id, mo.reference), ...s.audit],
+        });
+        return mo;
+      },
+
+      runFinancialCheck: (id, notes) => {
+        assertCan("moveout.financial");
+        const sess = session()!;
+        const s = get();
+        const m = s.moveOuts.find((x) => x.id === id);
+        if (!m || ["concluida", "cancelada", "autorizada"].includes(m.status)) throw new Error("Processo não disponível para verificação.");
+        const acc = accountFor(s, m);
+        const ok = acc.canIssueClearance;
+        const now = new Date().toISOString();
+        const financial: MoveOut["financial"] = { status: ok ? "regularizada" : "regularizacao_pendente", by: sess.name, at: now, notes, debtAtCheck: acc.confirmedDebt + acc.inValidation };
+        const status = nextMoveOutStatus({ ...m, financial });
+        set({
+          moveOuts: s.moveOuts.map((x) =>
+            x.id === id
+              ? { ...x, financial, status, history: [...x.history, { id: uid("mh"), at: now, by: sess.name, text: ok ? "Verificação financeira: situação regularizada." : `Verificação financeira: Regularização Financeira Pendente (${(acc.confirmedDebt + acc.inValidation).toLocaleString("pt-AO")} Kz).`, status }] }
+              : x,
+          ),
+          notifications: ok ? s.notifications : [notif("Regularização Financeira Pendente", `Processo ${m.reference}: existem valores em aberto. Consulte a conta corrente.`, ["morador"], "/painel/desocupacao"), ...s.notifications],
+          audit: [audit("Verificação financeira", "moveout", id, ok ? "regularizada" : `pendente ${acc.confirmedDebt}`), ...s.audit],
+        });
+      },
+
+      saveOperationalCheck: (id, input) => {
+        assertCan("moveout.operational");
+        const sess = session()!;
+        const s = get();
+        const m = s.moveOuts.find((x) => x.id === id);
+        if (!m || ["concluida", "cancelada", "autorizada"].includes(m.status)) throw new Error("Processo não disponível para verificação.");
+        const items = Object.values(input.checklist);
+        if (input.conclude && items.some((i) => i.state === "pendente" || i.state === "com_pendencias")) throw new Error("Existem itens pendentes ou com pendências — resolva-os antes de concluir a verificação operacional.");
+        const now = new Date().toISOString();
+        const operational: MoveOut["operational"] = { ...m.operational, checklist: input.checklist, notes: input.notes, report: input.report ?? m.operational.report, status: input.conclude ? "concluida" : "pendente", by: sess.name, at: now };
+        const status = nextMoveOutStatus({ ...m, operational });
+        set({
+          moveOuts: s.moveOuts.map((x) => (x.id === id ? { ...x, operational, status, history: [...x.history, { id: uid("mh"), at: now, by: sess.name, text: input.conclude ? "Verificação operacional concluída." : "Verificação operacional actualizada.", status }] } : x)),
+          audit: [audit(input.conclude ? "Verificação operacional concluída" : "Vistoria actualizada", "moveout", id), ...s.audit],
+        });
+      },
+
+      authorizeMoveOut: (id, notes) => {
+        assertCan("moveout.authorize");
+        const sess = session()!;
+        const s = get();
+        const m = s.moveOuts.find((x) => x.id === id);
+        if (!m) throw new Error("Processo inexistente.");
+        if (m.authorization) throw new Error(`Este processo já foi autorizado por ${m.authorization.by}.`);
+        const acc = accountFor(s, m);
+        // a declaração de quitação NÃO pode ser emitida com dívidas confirmadas ou pagamentos por validar
+        if (!acc.canIssueClearance) throw new Error(`Regularização Financeira Pendente: ${(acc.confirmedDebt + acc.inValidation).toLocaleString("pt-AO")} Kz em aberto ou por validar.`);
+        if (m.financial.status !== "regularizada") throw new Error("A verificação financeira ainda não foi concluída.");
+        if (m.operational.status !== "concluida") throw new Error("A verificação operacional ainda não foi concluída.");
+        const now = new Date().toISOString();
+        set({
+          moveOuts: s.moveOuts.map((x) =>
+            x.id === id ? { ...x, status: "autorizada", authorization: { by: sess.name, role: sess.role, at: now, notes }, history: [...x.history, { id: uid("mh"), at: now, by: sess.name, text: "Autorização administrativa de saída emitida.", status: "autorizada" }] } : x,
+          ),
+          notifications: [notif("Saída autorizada", `Processo ${m.reference} — Bloco ${m.block} · ${m.number}`, ["morador", "porteiro", "administrador"], "/painel/desocupacao"), ...s.notifications],
+          audit: [audit("Saída autorizada", "moveout", id, notes), ...s.audit],
+        });
+      },
+
+      completeMoveOut: (id) => {
+        assertCan("moveout.complete");
+        const sess = session()!;
+        const s = get();
+        const m = s.moveOuts.find((x) => x.id === id);
+        if (!m || m.status !== "autorizada") throw new Error("Só é possível concluir processos autorizados.");
+        const now = new Date().toISOString();
+        const today = todayISO();
+        // desocupação efectiva: liberta a fracção e preserva o histórico do antigo morador
+        set({
+          moveOuts: s.moveOuts.map((x) => (x.id === id ? { ...x, status: "concluida", completedAt: now, history: [...x.history, { id: uid("mh"), at: now, by: sess.name, text: "Desocupação concluída — fracção disponível.", status: "concluida" }] } : x)),
+          apartments: s.apartments.map((a) => (a.id === m.apartmentId ? { ...a, status: "disponivel", residentId: undefined } : a)),
+          residents: s.residents.map((r) => (r.id === m.residentId ? { ...r, status: "inactivo", apartmentId: undefined, notes: `Antigo morador de Bloco ${m.block} · ${m.number} — saída em ${today} (processo ${m.reference}).` } : r)),
+          occupancies: s.occupancies.map((o) => (o.residentId === m.residentId && o.apartmentId === m.apartmentId && !o.to ? { ...o, to: today } : o)),
+          audit: [audit("Desocupação concluída", "moveout", id, m.reference), ...s.audit],
+        });
+      },
+
+      cancelMoveOut: (id, reason) => {
+        const sess = session()!;
+        const s = get();
+        const m = s.moveOuts.find((x) => x.id === id);
+        if (!m) throw new Error("Processo inexistente.");
+        const own = sess.role === "morador" && m.residentId === sess.residentId;
+        if (!own && !can(sess.role, "moveout.complete")) throw new PermissionError("moveout.complete");
+        if (["concluida", "cancelada"].includes(m.status)) return;
+        const now = new Date().toISOString();
+        set({
+          moveOuts: s.moveOuts.map((x) => (x.id === id ? { ...x, status: "cancelada", history: [...x.history, { id: uid("mh"), at: now, by: sess.name, text: `Processo cancelado${reason ? `: ${reason}` : ""}.`, status: "cancelada" }] } : x)),
+          audit: [audit("Desocupação cancelada", "moveout", id, reason), ...s.audit],
         });
       },
 
@@ -519,19 +948,25 @@ export const useDemoStore = create<DemoData & DemoActions>()(
       markNotificationsRead: (ids) =>
         set((s) => ({ notifications: s.notifications.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) })),
 
-      resetDemo: () => set(initialData()),
+      resetDemo: () => set(initialAll()),
     }),
     {
       name: "laguna-demo-data",
-      version: 4,
+      version: 5,
       storage: safeStorage,
-      migrate: () => initialData() as DemoData & DemoActions,
+      migrate: () => initialAll() as DemoData & DemoActions,
       partialize: (s) => ({
         ...s,
         payments: s.payments.map((p) =>
           p.proof?.dataUrl && p.proof.dataUrl.length > MAX_PERSISTED_FILE ? { ...p, proof: { ...p.proof, dataUrl: undefined } } : p,
         ),
         notices: s.notices.map((n) => (n.pdf?.dataUrl && n.pdf.dataUrl.length > MAX_PERSISTED_FILE ? { ...n, pdf: { ...n.pdf, dataUrl: undefined } } : n)),
+        reservations: s.reservations.map((r) =>
+          r.payment?.proof?.dataUrl && r.payment.proof.dataUrl.length > MAX_PERSISTED_FILE ? { ...r, payment: { ...r.payment, proof: { ...r.payment.proof, dataUrl: undefined } } } : r,
+        ),
+        moveOuts: s.moveOuts.map((m) =>
+          m.operational.report?.dataUrl && m.operational.report.dataUrl.length > MAX_PERSISTED_FILE ? { ...m, operational: { ...m.operational, report: { ...m.operational.report, dataUrl: undefined } } } : m,
+        ),
       }),
       // quotas pendentes que ultrapassaram a data limite passam a "Em atraso"
       onRehydrateStorage: () => (state) => {
@@ -557,4 +992,31 @@ export function aptLabel(apartments: Apartment[], id?: string) {
   if (a) return formatApt(a);
   const [, block, number] = id.split("_");
   return block && number ? `Bloco ${block} · ${number}` : id;
+}
+
+/** Promove o primeiro pedido em espera quando uma data volta a ficar livre. */
+function promoteWaitlist(reservations: Reservation[], hallId: string, date: string, holdHours: number): Reservation[] {
+  if (reservations.some((r) => r.hallId === hallId && r.date === date && BLOCKING_RESERVATION.includes(r.status))) return reservations;
+  const next = reservations.filter((r) => r.hallId === hallId && r.date === date && r.status === "em_espera").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (!next) return reservations;
+  const now = new Date();
+  return reservations.map((r) =>
+    r.id === next.id ? { ...r, status: "pendente_pagamento", expiresAt: addH(now, holdHours), history: [...r.history, { id: uid("rh"), at: now.toISOString(), by: "Sistema", text: "Data libertada — pedido promovido da lista de espera.", status: "pendente_pagamento" }] } : r,
+  );
+}
+
+/** Conta corrente da fracção no período de ocupação do morador do processo. */
+export function accountFor(s: Pick<DemoData, "quotas" | "payments" | "charges" | "reservations" | "occupancies">, m: Pick<MoveOut, "apartmentId" | "residentId">) {
+  const occupancy = s.occupancies.find((o) => o.apartmentId === m.apartmentId && o.residentId === m.residentId);
+  return computeAccount({ apartmentId: m.apartmentId, quotas: s.quotas, payments: s.payments, charges: s.charges, reservations: s.reservations, occupancy });
+}
+
+/** Estado do processo de desocupação a partir das verificações. */
+function nextMoveOutStatus(m: Pick<MoveOut, "financial" | "operational" | "status">): MoveOutStatus {
+  if (m.status === "autorizada" || m.status === "concluida" || m.status === "cancelada") return m.status;
+  if (m.financial.status === "regularizacao_pendente") return "regularizacao_pendente";
+  if (m.financial.status === "regularizada" && m.operational.status === "concluida") return "aguardando_aprovacao";
+  if (m.financial.status === "regularizada") return "em_verificacao_operacional";
+  if (m.operational.status === "concluida") return "em_verificacao_financeira";
+  return m.financial.status === "pendente" && m.status === "solicitacao_recebida" && !m.operational.at ? "solicitacao_recebida" : "em_verificacao_financeira";
 }

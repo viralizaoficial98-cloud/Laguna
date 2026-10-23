@@ -4,8 +4,8 @@
  * pelo que os nomes e relações (ids) devem manter-se estáveis.
  */
 
-/** Perfis de acesso: Administrador do Condomínio, Gestor Operacional, Morador e Portaria. */
-export type Role = "administrador" | "gestor" | "morador" | "porteiro";
+/** Perfis de acesso: Administrador do Condomínio, Gestor Operacional, Gestor Financeiro, Morador e Portaria. */
+export type Role = "administrador" | "gestor" | "financeiro" | "morador" | "porteiro";
 
 export interface DemoUser {
   id: string;
@@ -86,8 +86,8 @@ export interface PublicNotice {
 // ————— Gestão do condomínio —————
 
 export type ApartmentStatus = "ocupado" | "disponivel" | "manutencao";
-/** O Residencial Laguna tem exclusivamente apartamentos T2, T3 e T4. */
-export type TypologyCode = "T2" | "T3" | "T4";
+/** Tipologias oficiais do Residencial Laguna: exclusivamente T2 e Duplex (3 quartos, sala, varanda). */
+export type TypologyCode = "T2" | "Duplex";
 
 export interface Apartment {
   id: string;
@@ -95,8 +95,7 @@ export interface Apartment {
   block: string;
   number: string;
   floor: number;
-  /** null = tipologia ainda não confirmada pela Administração. */
-  typology: TypologyCode | null;
+  typology: TypologyCode;
   status: ApartmentStatus;
   /** false = fracção desactivada (inexistente ou fora de uso). */
   active: boolean;
@@ -128,7 +127,8 @@ export interface Resident {
   notes?: string;
 }
 
-export type QuotaStatus = "pendente" | "em_analise" | "pago" | "em_atraso";
+/** em_analise = "Em Validação"; parcial = "Parcialmente Pago". */
+export type QuotaStatus = "pendente" | "em_analise" | "pago" | "parcial" | "em_atraso";
 
 /** Quota TRIMESTRAL do condomínio. */
 export interface Quota {
@@ -142,6 +142,11 @@ export interface Quota {
   amount: number;
   dueDate: string;
   status: QuotaStatus;
+  /** Tipologia usada no cálculo (T2 = 300 000 Kz; Duplex = 600 000 Kz). */
+  typology: TypologyCode;
+  /** Soma dos pagamentos aprovados. */
+  paidAmount: number;
+  /** Último pagamento submetido. */
   paymentId?: string;
 }
 
@@ -170,8 +175,15 @@ export interface Payment {
   proof?: PaymentProof;
   status: PaymentStatus;
   reviewedBy?: string;
+  reviewedByRole?: Role;
   reviewedAt?: string;
   note?: string;
+  /** Valor efectivamente validado (pode ser inferior ao valor submetido — pagamento parcial). */
+  validatedAmount?: number;
+  /** Registado directamente pelo Gestor Financeiro (ex.: numerário), sem comprovativo do morador. */
+  registeredBy?: string;
+  /** N.º do recibo emitido após confirmação. */
+  receiptNumber?: string;
 }
 
 export type CircularStatus = "rascunho" | "publicada" | "arquivada";
@@ -272,10 +284,146 @@ export interface VisitCheck {
 export type GuestPresence = "aguardando" | "no_interior" | "saiu";
 
 export interface CondoSettings {
-  /** Valor da quota trimestral (Kz). */
-  quarterlyQuota: number;
+  /** Quota trimestral por tipologia (Kz). */
+  quotaByTypology: Record<TypologyCode, number>;
   /** Dia limite de pagamento no 1.º mês de cada trimestre. */
   dueDay: number;
+  /** Aceitar pagamentos parciais das quotas. */
+  allowPartial: boolean;
+  /** Valor da reserva de salão (Kz). */
+  reservationFee: number;
+  /** Prazo (horas) para pagar uma reserva provisória antes de expirar. */
+  reservationHoldHours: number;
+}
+
+// ————— Reservas de salões —————
+
+export interface Hall {
+  id: string;
+  name: string;
+  description?: string;
+  capacity?: number;
+  active: boolean;
+  /** true = salão de demonstração, a confirmar pela Administração. */
+  demo: boolean;
+}
+
+export type ReservationStatus = "em_espera" | "pendente_pagamento" | "em_validacao" | "confirmada" | "cancelada" | "expirada";
+
+export interface ReservationEvent {
+  id: string;
+  at: string;
+  by: string;
+  text: string;
+  status?: ReservationStatus;
+}
+
+export interface Reservation {
+  id: string;
+  hallId: string;
+  residentId: string;
+  apartmentId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  eventType: string;
+  eventName: string;
+  expectedGuests: number;
+  guests: Guest[];
+  notes?: string;
+  fee: number;
+  status: ReservationStatus;
+  createdAt: string;
+  /** Prazo do bloqueio provisório (pendente de pagamento). */
+  expiresAt?: string;
+  payment?: {
+    reference: string;
+    proof?: PaymentProof;
+    submittedAt: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    note?: string;
+    receiptNumber?: string;
+  };
+  history: ReservationEvent[];
+}
+
+// ————— Encargos, ocupações, desocupação e auditoria —————
+
+/** Encargo adicional (ex.: danos). Só conta como dívida depois de confirmado pela Administração. */
+export interface Charge {
+  id: string;
+  apartmentId: string;
+  description: string;
+  justification: string;
+  amount: number;
+  date: string;
+  status: "proposto" | "confirmado" | "pago" | "anulado";
+  proposedBy: string;
+  confirmedBy?: string;
+  moveOutId?: string;
+}
+
+/** Período de ocupação de uma fracção por um morador (histórico preservado). */
+export interface Occupancy {
+  id: string;
+  apartmentId: string;
+  residentId: string;
+  residentName: string;
+  from: string;
+  to?: string;
+}
+
+export type MoveOutStatus =
+  | "solicitacao_recebida"
+  | "em_verificacao_financeira"
+  | "em_verificacao_operacional"
+  | "regularizacao_pendente"
+  | "aguardando_aprovacao"
+  | "autorizada"
+  | "concluida"
+  | "cancelada";
+
+export type CheckState = "pendente" | "conforme" | "com_pendencias" | "nao_aplicavel";
+
+export interface MoveOut {
+  id: string;
+  reference: string;
+  residentId: string;
+  residentName: string;
+  apartmentId: string;
+  block: string;
+  number: string;
+  typology: TypologyCode;
+  plannedDate: string;
+  reason?: string;
+  contact: string;
+  notes?: string;
+  status: MoveOutStatus;
+  createdAt: string;
+  financial: { status: "pendente" | "regularizacao_pendente" | "regularizada"; by?: string; at?: string; notes?: string; debtAtCheck?: number };
+  operational: {
+    status: "pendente" | "concluida";
+    checklist: Record<"apartamento" | "ocorrencias" | "equipamentos" | "chaves" | "danos" | "outras", { state: CheckState; notes?: string }>;
+    report?: { name: string; dataUrl?: string };
+    by?: string;
+    at?: string;
+    notes?: string;
+  };
+  authorization?: { by: string; role: Role; at: string; notes?: string };
+  completedAt?: string;
+  history: { id: string; at: string; by: string; text: string; status?: MoveOutStatus }[];
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  by: string;
+  role: Role;
+  action: string;
+  entity: string;
+  entityId: string;
+  details?: string;
 }
 
 export type OccurrencePriority = "baixa" | "media" | "alta" | "urgente";

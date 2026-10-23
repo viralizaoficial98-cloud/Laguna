@@ -40,13 +40,27 @@ export const PROVISIONAL_LAYOUT: { floor: number; numbers: string[] }[] = [
   { floor: 5, numbers: ["501", "502"] },
 ];
 
-export const TYPOLOGIES = ["T2", "T3", "T4"] as const;
+/** Tipologias oficiais: exclusivamente T2 e Duplex. */
+export const TYPOLOGIES = ["T2", "Duplex"] as const;
 
-/** Configuração em vigor — editável pelo Administrador em "Quotas trimestrais". */
+/**
+ * Proposta PROVISÓRIA de distribuição: 10 fracções por bloco, 8 T2 + 2 Duplex.
+ * Considera-se que os Duplex correspondem às fracções 501 e 502 (piso superior) — a confirmar
+ * e alterável pela Administração no cadastro de apartamentos.
+ */
+export const PROVISIONAL_DUPLEX_NUMBERS = ["501", "502"];
+
+/** Configuração em vigor — editável pela Administração / Gestor Financeiro. */
 export const DEFAULT_SETTINGS: CondoSettings = {
-  quarterlyQuota: 300_000,
+  quotaByTypology: { T2: 300_000, Duplex: 600_000 },
   dueDay: 15,
+  allowPartial: true,
+  reservationFee: 50_000,
+  reservationHoldHours: 48,
 };
+
+export const FINANCE_NAME = "Saraiva";
+export const GESTOR_OP_NAME = "Nelson Rodrigues";
 
 export const QUOTA_PERIODS = ["2025-T4", "2026-T1", "2026-T2", "2026-T3", "2026-T4"];
 
@@ -93,7 +107,9 @@ export interface ManagementSeed {
 
 export const DEMO_RESIDENT_APT = aptId("06", "201");
 /** Fracções com moradores usados nos exemplos de visitas. */
-const FORCED_OCCUPIED = new Set([DEMO_RESIDENT_APT, aptId("03", "102"), aptId("08", "401"), aptId("10", "502"), aptId("01", "101"), aptId("03", "202")]);
+const FORCED_OCCUPIED = new Set([DEMO_RESIDENT_APT, aptId("03", "102"), aptId("08", "401"), aptId("10", "502"), aptId("01", "101"), aptId("03", "202"), aptId("04", "302"), aptId("07", "201")]);
+/** Fracção usada no exemplo de processo de desocupação. */
+export const MOVEOUT_DEMO_APT = aptId("04", "302");
 
 export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS): ManagementSeed {
   const r = seededRandom(2026);
@@ -113,7 +129,7 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
           block,
           number,
           floor,
-          typology: null,
+          typology: PROVISIONAL_DUPLEX_NUMBERS.includes(number) ? "Duplex" : "T2",
           status,
           active: true,
           provisional: true,
@@ -152,8 +168,10 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
   const quotas: Quota[] = [];
   const payments: Payment[] = [];
 
-  for (const apt of apartments.filter((a) => a.status === "ocupado")) {
+  // As quotas são devidas por TODAS as fracções activas (ocupadas ou não — o proprietário responde pela quota).
+  for (const apt of apartments.filter((a) => a.active)) {
     const isDemo = apt.id === DEMO_RESIDENT_APT;
+    const quotaValue = settings.quotaByTypology[apt.typology];
     QUOTA_PERIODS.forEach((period, idx) => {
       const { year, quarter } = parseQuarter(period);
       const dueDate = quotaDueDate(period, settings.dueDay);
@@ -164,21 +182,24 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
         year,
         quarter,
         description: quotaDescription(period),
-        amount: settings.quarterlyQuota,
+        amount: quotaValue,
+        typology: apt.typology,
+        paidAmount: 0,
         dueDate,
         status: "pendente",
       };
       const roll = r();
       let status: Quota["status"];
       if (isDemo) status = idx < QUOTA_PERIODS.length - 1 ? "pago" : "pendente";
+      else if (apt.id === MOVEOUT_DEMO_APT && idx >= 3) status = idx === 3 ? "parcial" : "pendente";
       else if (idx <= 2) status = roll < 0.92 ? "pago" : "em_atraso";
       else if (idx === 3) status = roll < 0.84 ? "pago" : "em_atraso";
-      else status = roll < 0.42 ? "pago" : roll < 0.6 ? "em_analise" : "pendente";
+      else status = roll < 0.42 ? "pago" : roll < 0.58 ? "em_analise" : roll < 0.63 ? "parcial" : "pendente";
       // Quotas não pagas após a data limite ficam "Em atraso"
       if (status === "pendente" && dueDate < DEMO_TODAY) status = "em_atraso";
       quota.status = status;
 
-      if (status === "pago" || status === "em_analise") {
+      if (status === "pago" || status === "em_analise" || status === "parcial") {
         // pagamento entre 20 dias antes e 25 dias depois do início do trimestre (nunca depois de hoje)
         const base = new Date(`${dueDate}T10:00:00`);
         base.setDate(base.getDate() - 34 + Math.floor(r() * 45));
@@ -191,16 +212,23 @@ export function createManagementSeed(settings: CondoSettings = DEFAULT_SETTINGS)
           quotaId: quota.id,
           apartmentId: apt.id,
           residentId: apt.residentId,
-          amount: quota.amount,
+          amount: status === "parcial" ? quota.amount / 2 : quota.amount,
           method,
           reference: `${method === "multicaixa" ? "MCX" : method === "deposito" ? "DEP" : "TRF"}-${Math.floor(100000 + r() * 899999)}`,
           paidAt,
           submittedAt: paidAt,
           proof: { name: `comprovativo-B${apt.block}-${apt.number}-${period}.pdf`, type: "application/pdf", size: Math.floor(80000 + r() * 400000) },
-          status: status === "pago" ? "aprovado" : "em_analise",
-          reviewedBy: status === "pago" ? ADMIN_NAME : undefined,
-          reviewedAt: status === "pago" ? paidAt : undefined,
+          status: status === "em_analise" ? "em_analise" : "aprovado",
+          reviewedBy: status === "em_analise" ? undefined : r() < 0.75 ? FINANCE_NAME : GESTOR_OP_NAME,
+          reviewedAt: status === "em_analise" ? undefined : paidAt,
+          note: status === "parcial" ? "Pagamento parcial aceite (demo)." : undefined,
         };
+        if (pay.reviewedBy) {
+          pay.reviewedByRole = pay.reviewedBy === FINANCE_NAME ? "financeiro" : "gestor";
+          pay.validatedAmount = pay.amount;
+          pay.receiptNumber = `REC-${period.replace("-", "")}-${apt.block}${apt.number}`;
+          quota.paidAmount = pay.amount;
+        }
         payments.push(pay);
         quota.paymentId = pay.id;
       }

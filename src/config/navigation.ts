@@ -24,6 +24,9 @@ import {
   Sparkles,
   Trees,
   Wrench,
+  PartyPopper,
+  LogOut,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/types";
@@ -43,14 +46,16 @@ export interface AppNavGroup {
   items: AppNavItem[];
 }
 
-const ALL: Role[] = ["administrador", "gestor", "morador", "porteiro"];
+const ALL: Role[] = ["administrador", "gestor", "financeiro", "morador", "porteiro"];
 const ADM: Role[] = ["administrador"];
 const OPS: Role[] = ["administrador", "gestor"];
+const FIN: Role[] = ["administrador", "financeiro"];
+const STAFF: Role[] = ["administrador", "gestor", "financeiro"];
 
 export const appNavigation: AppNavGroup[] = [
   {
     label: "Geral",
-    items: [{ href: "/painel", label: "Dashboard", icon: LayoutDashboard, roles: ALL, labelFor: { administrador: "Dashboard executivo", gestor: "Dashboard operacional" } }],
+    items: [{ href: "/painel", label: "Dashboard", icon: LayoutDashboard, roles: ALL, labelFor: { administrador: "Dashboard executivo", gestor: "Dashboard operacional", financeiro: "Dashboard financeiro" } }],
   },
   {
     label: "Minha área",
@@ -58,16 +63,18 @@ export const appNavigation: AppNavGroup[] = [
       { href: "/painel/meu-apartamento", label: "Meu Apartamento", icon: Home, roles: ["morador"] },
       { href: "/painel/minhas-quotas", label: "Minhas Quotas", icon: Wallet, roles: ["morador"] },
       { href: "/painel/visitas", label: "Visitas", icon: UserPlus, roles: ["morador"] },
+      { href: "/painel/reservas", label: "Reservas de salões", icon: PartyPopper, roles: ["morador"] },
       { href: "/painel/meus-pagamentos", label: "Pagamentos", icon: Receipt, roles: ["morador"] },
       { href: "/painel/comprovativos", label: "Comprovativos", icon: BookOpenCheck, roles: ["morador"] },
       { href: "/painel/ocorrencias", label: "Minhas ocorrências", icon: ShieldAlert, roles: ["morador"] },
       { href: "/painel/elevadores", label: "Estado dos elevadores", icon: ArrowUpDown, roles: ["morador"] },
+      { href: "/painel/desocupacao", label: "Desocupação", icon: LogOut, roles: ["morador"] },
     ],
   },
   {
     label: "Executivo",
     items: [
-      { href: "/painel/financeiro", label: "Dashboard financeiro", icon: BarChart3, roles: ADM },
+      { href: "/painel/financeiro", label: "Dashboard financeiro", icon: BarChart3, roles: ["administrador", "gestor"], labelFor: { gestor: "Resumo financeiro" } },
       { href: "/painel/operacional", label: "Supervisão operacional", icon: Activity, roles: ADM },
     ],
   },
@@ -75,22 +82,25 @@ export const appNavigation: AppNavGroup[] = [
     label: "Gestão",
     items: [
       { href: "/painel/apartamentos", label: "Blocos e apartamentos", icon: Building2, roles: ADM },
-      { href: "/painel/moradores", label: "Moradores", icon: Users, roles: OPS },
+      { href: "/painel/moradores", label: "Moradores", icon: Users, roles: STAFF },
+      { href: "/painel/desocupacao", label: "Desocupações", icon: LogOut, roles: STAFF },
     ],
   },
   {
     label: "Financeiro",
     items: [
-      { href: "/painel/pagamentos", label: "Pagamentos", icon: Banknote, roles: ADM },
-      { href: "/painel/quotas", label: "Quotas trimestrais", icon: Wallet, roles: ADM },
-      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: ADM },
+      { href: "/painel/pagamentos", label: "Pagamentos e comprovativos", icon: Banknote, roles: STAFF, labelFor: { gestor: "Validação de pagamentos" } },
+      { href: "/painel/quotas", label: "Quotas trimestrais", icon: Wallet, roles: FIN },
+      { href: "/painel/conta-corrente", label: "Conta corrente", icon: ClipboardList, roles: FIN },
+      { href: "/painel/despesas", label: "Despesas", icon: Coins, roles: FIN },
+      { href: "/painel/reservas", label: "Reservas de salões", icon: PartyPopper, roles: STAFF },
     ],
   },
   {
     label: "Operações",
     items: [
       { href: "/painel/elevadores", label: "Elevadores", icon: ArrowUpDown, roles: OPS },
-      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: OPS },
+      { href: "/painel/ocorrencias", label: "Ocorrências", icon: ShieldAlert, roles: STAFF, labelFor: { financeiro: "Ocorrências (consulta)" } },
       { href: "/painel/limpeza", label: "Limpeza", icon: Sparkles, roles: OPS },
       { href: "/painel/jardinagem", label: "Jardinagem", icon: Trees, roles: OPS },
       { href: "/painel/manutencao", label: "Manutenção", icon: Wrench, roles: OPS },
@@ -99,8 +109,8 @@ export const appNavigation: AppNavGroup[] = [
   {
     label: "Comunicação",
     items: [
-      { href: "/painel/circulares", label: "Circulares", icon: ScrollText, roles: ["administrador", "gestor", "morador"] },
-      { href: "/painel/comunicados", label: "Comunicados", icon: Megaphone, roles: ["administrador", "gestor", "morador"] },
+      { href: "/painel/circulares", label: "Circulares", icon: ScrollText, roles: ["administrador", "gestor", "financeiro", "morador"] },
+      { href: "/painel/comunicados", label: "Comunicados", icon: Megaphone, roles: ["administrador", "gestor", "financeiro", "morador"] },
       { href: "/painel/documentos", label: "Documentos", icon: FileStack, roles: ["administrador", "gestor", "morador"] },
     ],
   },
@@ -114,7 +124,7 @@ export const appNavigation: AppNavGroup[] = [
   {
     label: "Administração",
     items: [
-      { href: "/painel/relatorios", label: "Relatórios", icon: FileText, roles: OPS },
+      { href: "/painel/relatorios", label: "Relatórios", icon: FileText, roles: STAFF },
       { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ADM },
     ],
   },

@@ -28,13 +28,19 @@ export default function QuotasPage() {
   const emitQuotas = useDemoStore((s) => s.emitQuotas);
   const canManage = can(session?.role, "quotas.manage");
 
-  const [value, setValue] = useState(String(settings.quarterlyQuota));
+  const [t2, setT2] = useState(String(settings.quotaByTypology.T2));
+  const [duplex, setDuplex] = useState(String(settings.quotaByTypology.Duplex));
+  const [partial, setPartial] = useState(settings.allowPartial);
   const [dueDay, setDueDay] = useState(String(settings.dueDay));
   const [emitting, setEmitting] = useState(false);
 
   const periods = useMemo(() => Array.from(new Set(quotas.map((q) => q.period))).sort(), [quotas]);
   const next = nextQuarter(periods.at(-1) ?? CURRENT_PERIOD);
-  const eligible = apartments.filter((a) => a.active && a.status === "ocupado").length;
+  const activeApts = apartments.filter((a) => a.active);
+  const eligible = activeApts.length;
+  const nT2 = activeApts.filter((a) => a.typology === "T2").length;
+  const nDuplex = activeApts.filter((a) => a.typology === "Duplex").length;
+  const theoretical = nT2 * settings.quotaByTypology.T2 + nDuplex * settings.quotaByTypology.Duplex;
 
   const rows = useMemo(
     () =>
@@ -50,7 +56,7 @@ export default function QuotasPage() {
             analysis: list.filter((q) => q.status === "em_analise").length,
             overdue: list.filter((q) => q.status === "em_atraso").length,
             emitted: list.reduce((a, q) => a + q.amount, 0),
-            received: paid.reduce((a, q) => a + q.amount, 0),
+            received: list.reduce((a, q) => a + q.paidAmount, 0),
             rate: list.length ? paid.length / list.length : 0,
           };
         })
@@ -59,11 +65,12 @@ export default function QuotasPage() {
   );
 
   const save = () => {
-    const v = Number(value.replace(/\D/g, ""));
+    const v2 = Number(t2.replace(/\D/g, ""));
+    const vd = Number(duplex.replace(/\D/g, ""));
     const d = Number(dueDay);
-    if (!v || v < 1000) return toast.error("Indique um valor trimestral válido.");
+    if (!v2 || !vd || v2 < 1000 || vd < 1000) return toast.error("Indique valores trimestrais válidos.");
     if (!d || d < 1 || d > 28) return toast.error("O dia limite deve estar entre 1 e 28.");
-    updateSettings({ quarterlyQuota: v, dueDay: d });
+    updateSettings({ quotaByTypology: { T2: v2, Duplex: vd }, dueDay: d, allowPartial: partial });
     toast.success("Configuração actualizada", { description: "Aplica-se às próximas emissões de quotas. As quotas já emitidas mantêm o valor." });
   };
 
@@ -72,7 +79,7 @@ export default function QuotasPage() {
       <PageHeader
         eyebrow="Financeiro"
         title="Quotas trimestrais"
-        description="A quota do Residencial Laguna é paga por trimestre: Jan–Mar, Abr–Jun, Jul–Set e Out–Dez."
+        description="Quota trimestral por tipologia (T2 e Duplex), quatro quotas por ano: Jan–Mar, Abr–Jun, Jul–Set e Out–Dez."
         actions={
           canManage && (
             <Button onClick={() => setEmitting(true)}>
@@ -84,18 +91,29 @@ export default function QuotasPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card>
-          <CardHeader title="Configuração em vigor" description="Editável pelo Administrador" />
+          <CardHeader title="Configuração em vigor" description="Administração e Gestor Financeiro" />
           <CardBody className="space-y-4">
-            <Field label="Valor da quota trimestral (Kz)" hint="Por fracção e por trimestre — não é uma mensalidade.">
-              <Input inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} disabled={!canManage} />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="T2 (Kz/trimestre)">
+                <Input inputMode="numeric" value={t2} onChange={(e) => setT2(e.target.value)} disabled={!canManage} />
+              </Field>
+              <Field label="Duplex (Kz/trimestre)">
+                <Input inputMode="numeric" value={duplex} onChange={(e) => setDuplex(e.target.value)} disabled={!canManage} />
+              </Field>
+            </div>
             <Field label="Dia limite de pagamento" hint="No 1.º mês de cada trimestre (ex.: 15 de Outubro).">
               <Input type="number" min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} disabled={!canManage} />
             </Field>
+            <label className="flex items-center gap-2 text-sm text-graphite-700">
+              <input type="checkbox" className="h-4 w-4 accent-navy-900" checked={partial} onChange={(e) => setPartial(e.target.checked)} disabled={!canManage} /> Autorizar pagamentos parciais
+            </label>
             <div className="rounded-xl bg-graphite-50 p-3 text-sm">
-              <p className="text-xs text-graphite-500">Valor actual</p>
-              <p className="text-xl font-semibold text-navy-900 tabular-nums">{formatKz(settings.quarterlyQuota)}</p>
-              <p className="text-xs text-graphite-500">equivale a {formatKz(settings.quarterlyQuota * 4)} por ano</p>
+              <p className="text-xs text-graphite-500">Receita trimestral teórica (ocupação integral, sem descontos)</p>
+              <p className="mt-1 text-xs text-graphite-600 tabular-nums">
+                {nT2} × {formatKz(settings.quotaByTypology.T2)} + {nDuplex} × {formatKz(settings.quotaByTypology.Duplex)}
+              </p>
+              <p className="text-xl font-semibold text-navy-900 tabular-nums">{formatKz(theoretical)}</p>
+              <p className="text-xs text-graphite-500">Anual: {formatKz(theoretical * 4)} — previsão de cobrança, não recebimentos.</p>
             </div>
             {canManage && (
               <Button onClick={save} className="w-full">
@@ -135,7 +153,7 @@ export default function QuotasPage() {
             { key: "due", header: "Data limite", cell: (r) => (r.due ? formatDate(r.due) : "—") },
             { key: "total", header: "Emitidas", align: "center", cell: (r) => r.total },
             { key: "paid", header: "Pagas", align: "center", cell: (r) => r.paid },
-            { key: "analysis", header: "Em análise", align: "center", cell: (r) => r.analysis, hideOnMobile: true },
+            { key: "analysis", header: "Em validação", align: "center", cell: (r) => r.analysis, hideOnMobile: true },
             { key: "overdue", header: "Em atraso", align: "center", cell: (r) => r.overdue, hideOnMobile: true },
             { key: "emitted", header: "Emitido", align: "right", cell: (r) => <span className="tabular-nums">{formatKz(r.emitted)}</span> },
             { key: "received", header: "Recebido", align: "right", cell: (r) => <span className="font-medium tabular-nums">{formatKz(r.received)}</span> },
@@ -160,7 +178,7 @@ export default function QuotasPage() {
         onClose={() => setEmitting(false)}
         tone="primary"
         title={`Emitir quotas do ${formatQuarter(next)}?`}
-        description={`Serão criadas até ${eligible} quotas de ${formatKz(settings.quarterlyQuota)} (fracções activas e ocupadas), com data limite ${formatDate(quotaDueDate(next, settings.dueDay))}.`}
+        description={`Serão criadas até ${eligible} quotas (${nT2} T2 × ${formatKz(settings.quotaByTypology.T2)} + ${nDuplex} Duplex × ${formatKz(settings.quotaByTypology.Duplex)}), uma por fracção, com data limite ${formatDate(quotaDueDate(next, settings.dueDay))}. Quotas já emitidas não são duplicadas.`}
         confirmLabel="Emitir quotas"
         onConfirm={() => {
           const n = emitQuotas(next);

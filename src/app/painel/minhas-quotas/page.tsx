@@ -1,13 +1,12 @@
 "use client";
 
-import { CheckCircle2, FileText, FlaskConical, Wallet, XCircle } from "lucide-react";
+import { CheckCircle2, Download, FileText, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import type { Payment, Quota } from "@/types";
+import { roleLabels } from "@/data/users";
 import { useDemoStore, formatApt } from "@/store/demo-store";
 import { useCurrentResident } from "@/hooks/use-session";
-import { withDemoRole } from "@/store/auth-store";
-import { cn, formatDate, formatKz, formatQuarter } from "@/lib/utils";
+import { cn, formatDate, formatKz, formatQuarter, todayISO } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,30 +15,42 @@ import { Tabs } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { PayQuotaModal } from "@/components/app/widgets/pay-quota-modal";
-import { ProofPreview } from "@/components/app/widgets/review-payment-modal";
+import { METHOD_LABELS, ProofPreview } from "@/components/app/widgets/review-payment-modal";
 
 export default function MinhasQuotasPage() {
   const { resident, apartment } = useCurrentResident();
   const quotas = useDemoStore((s) => s.quotas);
   const payments = useDemoStore((s) => s.payments);
-  const quarterly = useDemoStore((s) => s.settings.quarterlyQuota);
-  const review = useDemoStore((s) => s.reviewPayment);
+  const byTyp = useDemoStore((s) => s.settings.quotaByTypology);
+  const quarterly = apartment ? byTyp[apartment.typology] : 0;
   const [tab, setTab] = useState<"abertas" | "todas" | "pagas">("abertas");
   const [paying, setPaying] = useState<Quota | null>(null);
   const [proof, setProof] = useState<Payment | null>(null);
 
   const mine = useMemo(() => quotas.filter((q) => q.apartmentId === apartment?.id).sort((a, b) => b.period.localeCompare(a.period)), [quotas, apartment]);
   const list = mine.filter((q) => (tab === "todas" ? true : tab === "pagas" ? q.status === "pago" : q.status !== "pago"));
-  const debt = mine.filter((q) => q.status === "pendente" || q.status === "em_atraso").reduce((a, q) => a + q.amount, 0);
+  const debt = mine.filter((q) => q.status !== "pago" && q.status !== "em_analise" && q.dueDate < todayISO()).reduce((a, q) => a + q.amount - q.paidAmount, 0);
   const paymentOf = (q: Quota) => payments.find((p) => p.id === q.paymentId);
 
-  // Simulação do Financeiro/Administrador apenas para a demonstração do fluxo.
-  const simulate = (q: Quota, d: "aprovado" | "rejeitado") => {
-    if (!q.paymentId) return;
-    const id = q.paymentId;
-    withDemoRole("administrador", () => review(id, d, "Administração (simulação)", d === "rejeitado" ? "Comprovativo rejeitado em simulação." : undefined));
-    toast.success(d === "aprovado" ? "Pagamento validado (simulação da Administração)" : "Comprovativo rejeitado (simulação)");
-  };
+
+  const receipt = (q: Quota, p: Payment) =>
+    import("@/lib/finance-docs").then((m) =>
+      m.downloadReceipt({
+        receiptNumber: p.receiptNumber!,
+        payer: resident?.name ?? "—",
+        apartment: apartment ? formatApt(apartment) : "—",
+        typology: q.typology,
+        description: q.description,
+        period: formatQuarter(q.period),
+        amount: p.validatedAmount ?? p.amount,
+        method: METHOD_LABELS[p.method],
+        reference: p.reference,
+        paidAt: p.paidAt,
+        validatedBy: p.reviewedBy ?? "—",
+        validatedRole: p.reviewedByRole ? roleLabels[p.reviewedByRole] : undefined,
+        validatedAt: p.reviewedAt ?? p.submittedAt,
+      }),
+    );
 
   return (
     <>
@@ -51,16 +62,16 @@ export default function MinhasQuotasPage() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 p-5 text-white shadow-lift">
-          <p className="text-xs text-navy-200">Saldo em dívida</p>
+          <p className="text-xs text-navy-200">Dívida vencida</p>
           <p className="mt-2 text-3xl font-semibold tabular-nums">{formatKz(debt)}</p>
         </div>
         <div className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft">
-          <p className="text-xs text-graphite-500">Quota trimestral</p>
+          <p className="text-xs text-graphite-500">Quota trimestral · {apartment?.typology}</p>
           <p className="mt-2 text-3xl font-semibold text-navy-900 tabular-nums">{formatKz(quarterly)}</p>
-          <p className="text-xs text-graphite-400">por trimestre (não é mensalidade)</p>
+          <p className="text-xs text-graphite-400">por trimestre (T2: 300.000 Kz · Duplex: 600.000 Kz)</p>
         </div>
         <div className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft">
-          <p className="text-xs text-graphite-500">Trimestres pagos · em análise</p>
+          <p className="text-xs text-graphite-500">Trimestres pagos · em validação</p>
           <p className="mt-2 text-3xl font-semibold text-navy-900">
             {mine.filter((q) => q.status === "pago").length} <span className="text-lg text-graphite-400">· {mine.filter((q) => q.status === "em_analise").length}</span>
           </p>
@@ -97,7 +108,7 @@ export default function MinhasQuotasPage() {
             </div>
             <ul className="divide-y divide-graphite-100">
               {list.map((q) => {
-                const payable = q.status === "pendente" || q.status === "em_atraso";
+                const payable = q.status === "pendente" || q.status === "em_atraso" || q.status === "parcial";
                 const pay = paymentOf(q);
                 const lastRejected = payments.find((p) => p.quotaId === q.id && p.status === "rejeitado");
                 return (
@@ -117,6 +128,7 @@ export default function MinhasQuotasPage() {
                     <Cell label="Ano">{q.year}</Cell>
                     <Cell label="Valor" className="lg:text-right">
                       <span className="font-semibold text-navy-900 tabular-nums">{formatKz(q.amount)}</span>
+                      {q.paidAmount > 0 && q.paidAmount < q.amount && <span className="block text-[11px] text-graphite-500">pago {formatKz(q.paidAmount)} · falta {formatKz(q.amount - q.paidAmount)}</span>}
                     </Cell>
                     <Cell label="Estado">
                       <StatusBadge status={q.status} />
@@ -132,22 +144,19 @@ export default function MinhasQuotasPage() {
                       )}
                     </Cell>
                     <div className="col-span-2 flex flex-wrap items-center gap-2 lg:col-span-1 lg:justify-end">
+                      {payments
+                        .filter((p) => p.quotaId === q.id && p.status === "aprovado" && p.receiptNumber)
+                        .map((p) => (
+                          <Button key={p.id} size="sm" variant="outline" onClick={() => receipt(q, p)} title={`Recibo ${p.receiptNumber}`}>
+                            <Download className="h-3.5 w-3.5" /> Recibo
+                          </Button>
+                        ))}
                       {payable && (
                         <Button size="sm" variant="gold" onClick={() => setPaying(q)}>
                           <Wallet className="h-3.5 w-3.5" /> {lastRejected ? "Reenviar" : "Pagar"}
                         </Button>
                       )}
-                      {q.status === "em_analise" && (
-                        <span className="flex items-center gap-1 rounded-xl border border-dashed border-gold-300 bg-gold-50/60 p-1">
-                          <FlaskConical className="ml-1 h-3.5 w-3.5 text-gold-700" />
-                          <button onClick={() => simulate(q, "aprovado")} className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-white" title="Simular validação pela Administração">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Simular validação
-                          </button>
-                          <button onClick={() => simulate(q, "rejeitado")} className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-white">
-                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
-                          </button>
-                        </span>
-                      )}
+                      {q.status === "em_analise" && <span className="text-xs text-graphite-500">A aguardar validação pela gestão</span>}
                     </div>
                   </li>
                 );

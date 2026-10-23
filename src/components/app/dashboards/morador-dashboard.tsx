@@ -23,12 +23,17 @@ export function MoradorDashboard({ session }: { session: Session }) {
   const visits = useDemoStore((s) => s.visits);
   const elevators = useDemoStore((s) => s.elevators);
   const occurrences = useDemoStore((s) => s.occurrences);
+  const reservations = useDemoStore((s) => s.reservations);
+  const moveOuts = useDemoStore((s) => s.moveOuts);
+  const quotaValue = useDemoStore((s) => (apartment ? s.settings.quotaByTypology[apartment.typology] : 0));
+  const myRes = reservations.filter((r) => r.residentId === resident?.id && !["cancelada", "expirada"].includes(r.status) && r.date >= todayISO()).sort((a, b) => a.date.localeCompare(b.date));
+  const myMoveOut = moveOuts.find((m) => m.residentId === resident?.id && !["concluida", "cancelada"].includes(m.status));
   const myElevators = elevators.filter((e) => e.block === apartment?.block);
   const myOpenOcc = occurrences.filter((o) => o.residentId === resident?.id && o.status !== "resolvida");
 
   const mine = useMemo(() => quotas.filter((q) => q.apartmentId === apartment?.id).sort((a, b) => a.period.localeCompare(b.period)), [quotas, apartment]);
   const overdue = mine.filter((q) => q.status === "em_atraso");
-  const debt = mine.filter((q) => q.status === "em_atraso" || q.status === "pendente").reduce((a, q) => a + q.amount, 0);
+  const debt = mine.filter((q) => q.status !== "pago" && q.status !== "em_analise").reduce((a, q) => a + q.amount - q.paidAmount, 0);
   const myPayments = useMemo(() => payments.filter((p) => p.apartmentId === apartment?.id).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)), [payments, apartment]);
   const nextDue = mine.find((q) => q.status === "pendente" || q.status === "em_atraso");
   const myNotifs = notifications.filter((n) => n.roles.includes("morador")).slice(0, 4);
@@ -82,7 +87,7 @@ export function MoradorDashboard({ session }: { session: Session }) {
         <div className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft">
           <p className="text-xs text-graphite-500">Saldo em dívida</p>
           <p className="mt-2 text-2xl font-semibold text-navy-900 tabular-nums">{formatKz(debt)}</p>
-          <p className="text-sm text-graphite-500">{mine.filter((q) => q.status === "em_analise").length} comprovativo(s) em análise</p>
+          <p className="text-sm text-graphite-500">{mine.filter((q) => q.status === "em_analise").length} comprovativo(s) em validação</p>
         </div>
       </div>
 
@@ -106,6 +111,41 @@ export function MoradorDashboard({ session }: { session: Session }) {
             </span>
           </span>
           <ArrowRight className="h-4 w-4 text-graphite-400" />
+        </Link>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="morador-community">
+        <Link href="/painel/minhas-quotas" className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft hover:border-navy-200">
+          <p className="text-xs text-graphite-500">Quota trimestral · {apartment?.typology}</p>
+          <p className="mt-1 text-2xl font-semibold text-navy-900 tabular-nums">{formatKz(quotaValue)}</p>
+          <p className="text-xs text-graphite-400">4 quotas por ano</p>
+        </Link>
+        <Link href="/painel/meu-apartamento" className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft hover:border-navy-200">
+          <p className="text-xs text-graphite-500">Conta corrente</p>
+          <p className="mt-1 text-2xl font-semibold text-navy-900 tabular-nums">{formatKz(debt)}</p>
+          <p className="text-xs text-graphite-400">valores por liquidar · extracto em PDF</p>
+        </Link>
+        <Link href="/painel/reservas" className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft hover:border-navy-200">
+          <p className="flex items-center gap-1.5 text-xs text-graphite-500"><PartyPopper className="h-3.5 w-3.5" /> Reservas de salões</p>
+          {myRes[0] ? (
+            <>
+              <p className="mt-1 font-semibold text-navy-900">{formatDate(myRes[0].date)} · {myRes[0].eventName}</p>
+              <StatusBadge status={myRes[0].status} />
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-graphite-600">Sem reservas — consultar disponibilidade</p>
+          )}
+        </Link>
+        <Link href="/painel/desocupacao" className="rounded-2xl border border-graphite-100 bg-white p-5 shadow-soft hover:border-navy-200">
+          <p className="text-xs text-graphite-500">Desocupação do imóvel</p>
+          {myMoveOut ? (
+            <>
+              <p className="mt-1 font-semibold text-navy-900">Processo {myMoveOut.reference}</p>
+              <StatusBadge status={myMoveOut.status} />
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-graphite-600">Sem processo em curso</p>
+          )}
         </Link>
       </div>
 

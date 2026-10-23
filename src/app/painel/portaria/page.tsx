@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { VisitDetailModal } from "@/components/app/widgets/visit-detail-modal";
+import { PortariaEvents } from "@/components/app/widgets/portaria-events";
 
 type Tab = "hoje" | "proximas" | "todas";
 
@@ -152,6 +153,7 @@ export default function PortariaPage() {
           ]}
         />
       </Card>
+      <PortariaEvents />
       <VisitDetailModal visit={selected} onClose={() => setSelectedId(null)} />
     </>
   );

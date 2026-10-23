@@ -14,6 +14,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { VisitDetailModal } from "@/components/app/widgets/visit-detail-modal";
 import { Welcome } from "./welcome";
+import { PortariaEvents } from "@/components/app/widgets/portaria-events";
 
 export function PorteiroDashboard({ session }: { session: Session }) {
   const today = todayISO();
@@ -112,6 +113,7 @@ export function PorteiroDashboard({ session }: { session: Session }) {
         </ul>
       </Card>
       <VisitDetailModal visit={selected} onClose={() => setSelectedId(null)} />
+      <PortariaEvents />
     </>
   );
 }

@@ -4,7 +4,8 @@ import { Badge, type BadgeTone } from "./badge";
 const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   // quotas / pagamentos
   pendente: { label: "Pendente", tone: "neutral" },
-  em_analise: { label: "Em análise", tone: "info" },
+  em_analise: { label: "Em validação", tone: "info" },
+  parcial: { label: "Parcialmente pago", tone: "gold" },
   pago: { label: "Pago", tone: "success" },
   aprovado: { label: "Validado", tone: "success" },
   rejeitado: { label: "Rejeitado", tone: "danger" },
@@ -31,6 +32,7 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   retirado: { label: "Retirado", tone: "violet" },
   // ocorrências
   aberta: { label: "Aberta", tone: "warning" },
+  occ_em_analise: { label: "Em análise", tone: "info" },
   em_curso: { label: "Em curso", tone: "info" },
   em_execucao: { label: "Em execução", tone: "info" },
   resolvida: { label: "Resolvida", tone: "success" },
@@ -49,6 +51,25 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   atrasada: { label: "Atrasada", tone: "danger" },
   conforme: { label: "Conforme", tone: "success" },
   nao_conforme: { label: "Não conforme", tone: "danger" },
+  // reservas de salões
+  em_espera: { label: "Lista de espera", tone: "violet" },
+  pendente_pagamento: { label: "Pendente de pagamento", tone: "warning" },
+  em_validacao: { label: "Em validação", tone: "info" },
+  confirmada: { label: "Confirmada", tone: "success" },
+  expirada: { label: "Expirada", tone: "neutral" },
+  // desocupação
+  solicitacao_recebida: { label: "Solicitação recebida", tone: "navy" },
+  em_verificacao_financeira: { label: "Em verificação financeira", tone: "info" },
+  em_verificacao_operacional: { label: "Em verificação operacional", tone: "info" },
+  regularizacao_pendente: { label: "Regularização pendente", tone: "warning" },
+  aguardando_aprovacao: { label: "Aguardando aprovação", tone: "gold" },
+  regularizada: { label: "Regularizada", tone: "success" },
+  com_pendencias: { label: "Com pendências", tone: "warning" },
+  nao_aplicavel: { label: "Não aplicável", tone: "neutral" },
+  // encargos
+  proposto: { label: "Proposto", tone: "gold" },
+  confirmado: { label: "Confirmado", tone: "warning" },
+  anulado: { label: "Anulado", tone: "neutral" },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
@@ -59,6 +80,9 @@ export function StatusBadge({ status, className }: { status: string; className?:
     </Badge>
   );
 }
+
+/** Estado de ocorrência ("em_analise" significa "Em análise", não "Em validação"). */
+export const occStatus = (s: string) => (s === "em_analise" ? "occ_em_analise" : s);
 
 export function statusLabel(status: string) {
   return MAP[status]?.label ?? status;

@@ -21,8 +21,8 @@ export function PendingPayments({ limit = 5 }: { limit?: number }) {
   return (
     <Card>
       <CardHeader
-        title="Pagamentos a aguardar aprovação"
-        description={`${pending.length} comprovativos em análise`}
+        title="Pagamentos a aguardar validação"
+        description={`${pending.length} comprovativos em validação · Gestor Operacional ou Gestor Financeiro`}
         action={
           <Link href="/painel/pagamentos" className="inline-flex items-center gap-1 text-xs font-medium text-navy-700 hover:text-navy-900">
             Ver todos <ArrowRight className="h-3.5 w-3.5" />

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useDemoStore, aptLabel } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
 import { useFinance } from "@/hooks/use-finance";
+import { TYPOLOGIES } from "@/data/management";
 import { downloadCsv, formatKz, formatQuarter } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { can } from "@/config/permissions";
@@ -13,7 +14,7 @@ import { PdfReports } from "@/components/app/widgets/pdf-reports";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
-import { StatusBadge, statusLabel } from "@/components/ui/status-badge";
+import { StatusBadge, statusLabel, occStatus } from "@/components/ui/status-badge";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { Donut, GroupedBars, HBars } from "@/components/charts/charts";
 
@@ -48,8 +49,8 @@ export default function RelatoriosPage() {
           { id: "quotas", label: "Quotas" },
           { id: "pagamentos", label: "Pagamentos" },
         ] as const)),
-    { id: "visitas", label: "Visitas" },
-    { id: "ocorrencias", label: "Ocorrências" },
+    ...(can(session?.role, "visits.view_all") ? [{ id: "visitas" as const, label: "Visitas" }] : []),
+    ...(can(session?.role, "occurrences.view") ? [{ id: "ocorrencias" as const, label: "Ocorrências" }] : []),
   ];
 
   const blocks = useMemo(() => Array.from(new Set(apartments.map((a) => a.block))).sort(), [apartments]);
@@ -68,11 +69,11 @@ export default function RelatoriosPage() {
         };
       }
       case "apartamentos": {
-        const byTyp = [...(["T2", "T3", "T4"] as const).map((t) => ({ label: t as string, value: apartments.filter((a) => a.typology === t).length })), { label: "Por definir", value: apartments.filter((a) => !a.typology).length }];
+        const byTyp = TYPOLOGIES.map((t) => ({ label: t as string, value: apartments.filter((a) => a.active && a.typology === t).length }));
         return {
           chart: <HBars data={byTyp} />,
           side: <Donut data={byTyp.map((t) => ({ key: t.label, label: t.label, value: t.value }))} />,
-          table: { head: ["Bloco", "Apartamento", "Tipologia", "Piso", "Cadastro", "Estado"], rows: apartments.map((a) => [`Bloco ${a.block}`, a.number, a.typology ?? "Por definir", a.floor, a.provisional ? "Provisório" : "Validado", a.active ? statusLabel(a.status) : "Desactivado"]) } as Table,
+          table: { head: ["Bloco", "Apartamento", "Tipologia", "Piso", "Cadastro", "Estado"], rows: apartments.map((a) => [`Bloco ${a.block}`, a.number, a.typology, a.floor, a.provisional ? "Provisório" : "Validado", a.active ? statusLabel(a.status) : "Desactivado"]) } as Table,
         };
       }
       case "moradores": {
@@ -123,7 +124,7 @@ export default function RelatoriosPage() {
         return {
           chart: <HBars data={cats.map((c) => ({ label: c, value: occurrences.filter((o) => o.category === c).length }))} />,
           side: <Donut data={[{ key: "a", label: "Abertas", value: occurrences.filter((o) => o.status === "aberta").length }, { key: "n", label: "Em análise", value: occurrences.filter((o) => o.status === "em_analise").length }, { key: "c", label: "Em execução", value: occurrences.filter((o) => o.status === "em_execucao").length }, { key: "r", label: "Resolvidas", value: occurrences.filter((o) => o.status === "resolvida").length }]} />,
-          table: { head: ["Ocorrência", "Categoria", "Prioridade", "Estado", "Local"], rows: occurrences.map((o) => [o.title, o.category, statusLabel(o.priority), statusLabel(o.status), o.location]) } as Table,
+          table: { head: ["Ocorrência", "Categoria", "Prioridade", "Estado", "Local"], rows: occurrences.map((o) => [o.title, o.category, statusLabel(o.priority), statusLabel(occStatus(o.status)), o.location]) } as Table,
         };
       }
     }
@@ -197,7 +198,7 @@ export default function RelatoriosPage() {
 }
 
 const REVERSE: Record<string, string> = {
-  Pendente: "pendente", "Em análise": "em_analise", Pago: "pago", Validado: "aprovado", Rejeitado: "rejeitado", "Em atraso": "em_atraso", Desactivado: "inactivo",
+  Pendente: "pendente", "Em análise": "em_analise", "Em validação": "em_analise", "Parcialmente pago": "parcial", Pago: "pago", Validado: "aprovado", Rejeitado: "rejeitado", "Em atraso": "em_atraso", Desactivado: "inactivo",
   Ocupado: "ocupado", Disponível: "disponivel", Manutenção: "manutencao", Activo: "activo", Inactivo: "inactivo",
   Aberta: "aberta", "Em execução": "em_execucao", Resolvida: "resolvida",
 };
