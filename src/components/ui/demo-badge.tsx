@@ -14,7 +14,7 @@ export function DemoDataNote({ className, children }: { className?: string; chil
   return (
     <p className={cn("inline-flex items-center gap-1.5 text-[11px] text-graphite-500", className)}>
       <FlaskConical className="h-3.5 w-3.5 text-gold-600" />
-      {children ?? "Dados fictícios de demonstração"}
+      {children ?? "Inclui dados iniciais de demonstração — a validar pela Administração"}
     </p>
   );
 }

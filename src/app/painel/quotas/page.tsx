@@ -182,7 +182,7 @@ export default function QuotasPage() {
         confirmLabel="Emitir quotas"
         onConfirm={() => {
           const n = emitQuotas(next);
-          toast.success(`${n} quotas emitidas para o ${formatQuarter(next)} (demonstração).`);
+          toast.success(`${n} quotas emitidas para o ${formatQuarter(next)}.`);
         }}
       />
     </>

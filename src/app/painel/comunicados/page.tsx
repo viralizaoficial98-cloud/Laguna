@@ -23,6 +23,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IconBtn } from "@/components/ui/icon-button";
 import { DemoDataNote } from "@/components/ui/demo-badge";
+import { fileSrc } from "@/lib/api-client";
 
 const CATEGORIES = ["Geral", "Manutenção", "Assembleia", "Segurança"] as const;
 const MAX_PDF = 10 * 1024 * 1024;
@@ -37,12 +38,13 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 function downloadPdf(pdf: NoticeAttachment) {
-  if (!pdf.dataUrl) {
-    toast.info("O ficheiro deste comunicado não está disponível neste browser (demonstração).");
+  const src = fileSrc(pdf);
+  if (!src) {
+    toast.info("O ficheiro deste comunicado não está disponível (apenas o nome foi registado).");
     return;
   }
   const a = document.createElement("a");
-  a.href = pdf.dataUrl;
+  a.href = src;
   a.download = pdf.name;
   a.click();
 }
@@ -74,7 +76,7 @@ export default function ComunicadosPainelPage() {
     try {
       const now = new Date().toISOString();
       saveNotice({ ...n, status, publishedAt: status === "publicado" ? now : n.publishedAt, withdrawnAt: status === "retirado" ? now : n.withdrawnAt, updatedAt: now });
-      toast.success(status === "retirado" ? "Comunicado retirado de publicação" : "Comunicado publicado (demonstração)");
+      toast.success(status === "retirado" ? "Comunicado retirado de publicação" : "Comunicado publicado");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -215,7 +217,7 @@ export default function ComunicadosPainelPage() {
               withdrawnAt: base?.withdrawnAt,
               updatedAt: now,
             });
-            toast.success(status === "publicado" ? "Comunicado publicado para os moradores (demonstração)" : "Rascunho guardado");
+            toast.success(status === "publicado" ? "Comunicado publicado para os moradores" : "Rascunho guardado");
             setEditing(null);
           } catch (e) {
             toast.error((e as Error).message);
@@ -223,10 +225,10 @@ export default function ComunicadosPainelPage() {
         }}
       />
       <Modal open={!!viewing} onClose={() => setViewing(null)} size="xl" title={viewing?.title} description={viewing?.pdf?.name}>
-        {viewing?.pdf?.dataUrl ? (
-          <iframe src={viewing.pdf.dataUrl} title={viewing.pdf.name} className="h-[75vh] w-full rounded-xl border border-graphite-100" />
+        {fileSrc(viewing?.pdf) ? (
+          <iframe src={fileSrc(viewing?.pdf)} title={viewing?.pdf?.name} className="h-[75vh] w-full rounded-xl border border-graphite-100" />
         ) : (
-          <EmptyState icon={FileText} title="Pré-visualização indisponível" description="O PDF não está guardado neste browser. Na versão com servidor, o ficheiro ficará disponível para todos os moradores." />
+          <EmptyState icon={FileText} title="Pré-visualização indisponível" description="O conteúdo do PDF não está disponível (apenas o nome foi registado)." />
         )}
       </Modal>
       <ConfirmDialog
@@ -358,16 +360,16 @@ function NoticeForm({
               <p className="text-xs text-graphite-500">Opcional · máx. 10 MB</p>
             </button>
           )}
-          <DemoDataNote>O PDF fica apenas neste browser — não é enviado para servidores nesta fase.</DemoDataNote>
+          <DemoDataNote>O PDF é guardado no servidor e disponibilizado aos moradores quando o comunicado é publicado.</DemoDataNote>
         </form>
         <div>
           <p className="mb-2 text-xs font-medium text-graphite-500">Pré-visualização do documento</p>
-          {pdf?.dataUrl && (showPreview || notice) ? (
-            <iframe src={pdf.dataUrl} title="Pré-visualização do PDF" className="h-[460px] w-full rounded-xl border border-graphite-100" />
+          {fileSrc(pdf) && (showPreview || notice) ? (
+            <iframe src={fileSrc(pdf)} title="Pré-visualização do PDF" className="h-[460px] w-full rounded-xl border border-graphite-100" />
           ) : (
             <div className="flex h-[460px] flex-col items-center justify-center rounded-xl border border-dashed border-graphite-200 bg-graphite-50 text-center text-sm text-graphite-400">
               <FileText className="mb-2 h-8 w-8" />
-              {pdf ? "Pré-visualização indisponível para este ficheiro neste browser." : "Anexe um PDF para o pré-visualizar."}
+              {pdf ? "Pré-visualização indisponível para este ficheiro." : "Anexe um PDF para o pré-visualizar."}
             </div>
           )}
         </div>

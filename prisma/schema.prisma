@@ -1,0 +1,695 @@
+// Portal Residencial Laguna — esquema MySQL/MariaDB (Prisma 7)
+//
+// Convenções:
+// - Montantes em DECIMAL(14,2) (nunca vírgula flutuante).
+// - Datas de calendário em DATE; instantes em DATETIME(3) (UTC).
+// - Estruturas aninhadas (históricos, convidados, listas de verificação, metadados de anexos) em LONGTEXT
+//   com JSON, para compatibilidade total entre MySQL 5.7+/8 e MariaDB 10.x.
+// - Identificadores estáveis (string) herdados do cadastro actual — a importação é idempotente.
+// - Restrições de integridade na base de dados: quota única por fracção/trimestre, uma reserva activa
+//   por salão/data (reservation_slots), um comprovativo em validação por quota (pending_payment_slots),
+//   um processo de desocupação activo por morador (active_moveouts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  administrador
+  gestor
+  financeiro
+  morador
+  porteiro
+}
+
+enum Typology {
+  T2
+  Duplex
+}
+
+enum QuotaStatus {
+  pendente
+  em_analise
+  pago
+  parcial
+  em_atraso
+}
+
+enum PaymentStatus {
+  em_analise
+  aprovado
+  rejeitado
+}
+
+enum ReservationStatus {
+  em_espera
+  pendente_pagamento
+  em_validacao
+  confirmada
+  cancelada
+  expirada
+}
+
+enum MoveOutStatus {
+  solicitacao_recebida
+  em_verificacao_financeira
+  em_verificacao_operacional
+  regularizacao_pendente
+  aguardando_aprovacao
+  autorizada
+  concluida
+  cancelada
+}
+
+enum UserStatus {
+  pendente_activacao
+  activo
+  inactivo
+  bloqueado
+}
+
+// ————————————————————————— Sistema —————————————————————————
+
+/// Linha única: versão dos dados (sincronização) e trinco de escrita (SELECT … FOR UPDATE).
+model AppMeta {
+  id          Int      @id
+  dataVersion Int      @default(0)
+  updatedAt   DateTime @updatedAt @db.DateTime(3)
+
+  @@map("app_meta")
+}
+
+model CondoSettings {
+  id                   Int      @id
+  quotaT2              Decimal  @db.Decimal(14, 2)
+  quotaDuplex          Decimal  @db.Decimal(14, 2)
+  dueDay               Int
+  allowPartial         Boolean
+  reservationFee       Decimal  @db.Decimal(14, 2)
+  reservationHoldHours Int
+  updatedAt            DateTime @updatedAt @db.DateTime(3)
+
+  @@map("condo_settings")
+}
+
+// ————————————————————————— Autenticação e utilizadores —————————————————————————
+
+model User {
+  id                String     @id @db.VarChar(64)
+  name              String     @db.VarChar(160)
+  email             String     @unique @db.VarChar(190)
+  role              Role
+  title             String     @db.VarChar(160)
+  status            UserStatus @default(pendente_activacao)
+  /// Argon2id. Nulo enquanto a conta não for activada.
+  passwordHash      String?    @db.VarChar(255)
+  residentId        String?    @unique @db.VarChar(64)
+  apartmentId       String?    @db.VarChar(64)
+  block             String?    @db.VarChar(4)
+  phone             String?    @db.VarChar(40)
+  failedLogins      Int        @default(0)
+  lockedUntil       DateTime?  @db.DateTime(3)
+  lastLoginAt       DateTime?  @db.DateTime(3)
+  passwordChangedAt DateTime?  @db.DateTime(3)
+  createdAt         DateTime   @default(now()) @db.DateTime(3)
+  updatedAt         DateTime   @updatedAt @db.DateTime(3)
+  createdBy         String?    @db.VarChar(64)
+
+  resident Resident?     @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  sessions AuthSession[]
+  tokens   AuthToken[]
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model AuthSession {
+  id         String   @id @db.VarChar(64)
+  /// SHA-256 do token do cookie (o token em claro nunca é guardado).
+  tokenHash  String   @unique @db.Char(64)
+  userId     String   @db.VarChar(64)
+  createdAt  DateTime @default(now()) @db.DateTime(3)
+  lastSeenAt DateTime @default(now()) @db.DateTime(3)
+  expiresAt  DateTime @db.DateTime(3)
+  ip         String?  @db.VarChar(64)
+  userAgent  String?  @db.VarChar(255)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+/// Tokens de activação e de redefinição de palavra-passe — utilização única, com prazo.
+model AuthToken {
+  id        String    @id @db.VarChar(64)
+  tokenHash String    @unique @db.Char(64)
+  userId    String    @db.VarChar(64)
+  type      String    @db.VarChar(20)
+  expiresAt DateTime  @db.DateTime(3)
+  usedAt    DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  createdBy String?   @db.VarChar(64)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_tokens")
+}
+
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(190)
+  userId    String?  @db.VarChar(64)
+  ip        String?  @db.VarChar(64)
+  userAgent String?  @db.VarChar(255)
+  success   Boolean
+  reason    String?  @db.VarChar(60)
+  at        DateTime @default(now()) @db.DateTime(3)
+
+  @@index([email, at])
+  @@index([ip, at])
+  @@index([userId, at])
+  @@map("login_attempts")
+}
+
+/// Histórico de alterações às contas (sem palavras-passe nem tokens).
+model UserAuditLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now()) @db.DateTime(3)
+  actorId    String?  @db.VarChar(64)
+  actorName  String   @db.VarChar(160)
+  targetId   String?  @db.VarChar(64)
+  targetName String?  @db.VarChar(160)
+  action     String   @db.VarChar(60)
+  before     String?  @db.Text
+  after      String?  @db.Text
+  ip         String?  @db.VarChar(64)
+
+  @@index([targetId, at])
+  @@index([at])
+  @@map("user_audit_log")
+}
+
+// ————————————————————————— Ficheiros —————————————————————————
+
+/// Metadados dos ficheiros guardados fora da pasta pública (STORAGE_DIR).
+model StoredFile {
+  id           String   @id @db.VarChar(64)
+  originalName String   @db.VarChar(255)
+  mime         String   @db.VarChar(100)
+  size         Int
+  sha256       String   @db.Char(64)
+  storagePath  String   @db.VarChar(255)
+  ownerUserId  String?  @db.VarChar(64)
+  ownerRole    Role?
+  residentId   String?  @db.VarChar(64)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  @@index([ownerUserId])
+  @@map("stored_files")
+}
+
+// ————————————————————————— Cadastro —————————————————————————
+
+model Apartment {
+  id          String   @id @db.VarChar(64)
+  block       String   @db.VarChar(4)
+  number      String   @db.VarChar(8)
+  floor       Int
+  typology    Typology
+  status      String   @db.VarChar(20)
+  active      Boolean
+  provisional Boolean
+  ownerName   String   @db.VarChar(160)
+  residentId  String?  @db.VarChar(64)
+  notes       String?  @db.Text
+
+  residents    Resident[]
+  quotas       Quota[]
+  payments     Payment[]
+  reservations Reservation[]
+  moveOuts     MoveOut[]
+  occupancies  Occupancy[]
+  charges      Charge[]
+  visits       Visit[]
+
+  @@unique([block, number])
+  @@map("apartments")
+}
+
+model Resident {
+  id          String   @id @db.VarChar(64)
+  name        String   @db.VarChar(160)
+  email       String   @db.VarChar(190)
+  phone       String   @db.VarChar(40)
+  documentId  String   @db.VarChar(40)
+  apartmentId String?  @db.VarChar(64)
+  type        String   @db.VarChar(20)
+  status      String   @db.VarChar(20)
+  since       DateTime @db.Date
+  dependents  String   @db.LongText
+  notes       String?  @db.Text
+
+  apartment Apartment? @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+  user      User?
+
+  @@index([apartmentId])
+  @@map("residents")
+}
+
+model Occupancy {
+  id           String    @id @db.VarChar(80)
+  apartmentId  String    @db.VarChar(64)
+  residentId   String    @db.VarChar(64)
+  residentName String    @db.VarChar(160)
+  from         DateTime  @db.Date
+  to           DateTime? @db.Date
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+
+  @@index([apartmentId])
+  @@index([residentId])
+  @@map("occupancies")
+}
+
+// ————————————————————————— Financeiro —————————————————————————
+
+model Quota {
+  id          String      @id @db.VarChar(80)
+  apartmentId String      @db.VarChar(64)
+  period      String      @db.VarChar(8)
+  year        Int
+  quarter     Int
+  description String      @db.VarChar(160)
+  amount      Decimal     @db.Decimal(14, 2)
+  typology    Typology
+  paidAmount  Decimal     @db.Decimal(14, 2)
+  dueDate     DateTime    @db.Date
+  status      QuotaStatus
+  paymentId   String?     @db.VarChar(80)
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+  payments  Payment[]
+
+  @@unique([apartmentId, period])
+  @@index([period])
+  @@index([status])
+  @@map("quotas")
+}
+
+model Payment {
+  id              String        @id @db.VarChar(80)
+  quotaId         String        @db.VarChar(80)
+  apartmentId     String        @db.VarChar(64)
+  residentId      String?       @db.VarChar(64)
+  amount          Decimal       @db.Decimal(14, 2)
+  method          String        @db.VarChar(20)
+  reference       String        @db.VarChar(120)
+  paidAt          DateTime      @db.DateTime(3)
+  submittedAt     DateTime      @db.DateTime(3)
+  proof           String?       @db.Text
+  status          PaymentStatus
+  reviewedBy      String?       @db.VarChar(160)
+  reviewedByRole  Role?
+  reviewedAt      DateTime?     @db.DateTime(3)
+  note            String?       @db.Text
+  validatedAmount Decimal?      @db.Decimal(14, 2)
+  registeredBy    String?       @db.VarChar(160)
+  receiptNumber   String?       @unique @db.VarChar(40)
+
+  quota     Quota     @relation(fields: [quotaId], references: [id], onDelete: Restrict)
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+
+  @@index([quotaId])
+  @@index([status])
+  @@index([apartmentId])
+  @@map("payments")
+}
+
+/// No máximo um comprovativo "Em Validação" por quota (impede decisões contraditórias).
+model PendingPaymentSlot {
+  quotaId   String @id @db.VarChar(80)
+  paymentId String @unique @db.VarChar(80)
+
+  @@map("pending_payment_slots")
+}
+
+model Charge {
+  id            String   @id @db.VarChar(80)
+  apartmentId   String   @db.VarChar(64)
+  description   String   @db.VarChar(255)
+  justification String   @db.Text
+  amount        Decimal  @db.Decimal(14, 2)
+  date          DateTime @db.Date
+  status        String   @db.VarChar(20)
+  proposedBy    String   @db.VarChar(160)
+  confirmedBy   String?  @db.VarChar(160)
+  moveOutId     String?  @db.VarChar(80)
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+
+  @@index([apartmentId])
+  @@map("charges")
+}
+
+model Expense {
+  id          String   @id @db.VarChar(80)
+  date        DateTime @db.Date
+  period      String   @db.VarChar(8)
+  category    String   @db.VarChar(40)
+  description String   @db.VarChar(255)
+  amount      Decimal  @db.Decimal(14, 2)
+
+  @@index([period])
+  @@map("expenses")
+}
+
+// ————————————————————————— Reservas de salões —————————————————————————
+
+model Hall {
+  id          String  @id @db.VarChar(64)
+  name        String  @db.VarChar(120)
+  description String? @db.Text
+  capacity    Int?
+  active      Boolean
+  demo        Boolean
+
+  reservations Reservation[]
+
+  @@map("halls")
+}
+
+model Reservation {
+  id             String            @id @db.VarChar(80)
+  hallId         String            @db.VarChar(64)
+  residentId     String            @db.VarChar(64)
+  apartmentId    String            @db.VarChar(64)
+  date           DateTime          @db.Date
+  startTime      String            @db.VarChar(5)
+  endTime        String            @db.VarChar(5)
+  eventType      String            @db.VarChar(60)
+  eventName      String            @db.VarChar(160)
+  expectedGuests Int
+  guests         String            @db.LongText
+  notes          String?           @db.Text
+  fee            Decimal           @db.Decimal(14, 2)
+  status         ReservationStatus
+  createdAt      DateTime          @db.DateTime(3)
+  expiresAt      DateTime?         @db.DateTime(3)
+  payment        String?           @db.Text
+  history        String            @db.LongText
+
+  hall      Hall      @relation(fields: [hallId], references: [id], onDelete: Restrict)
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+
+  @@index([hallId, date])
+  @@index([residentId])
+  @@map("reservations")
+}
+
+/// Uma reserva activa (pendente de pagamento, em validação ou confirmada) por salão e data.
+model ReservationSlot {
+  hallId        String   @db.VarChar(64)
+  date          DateTime @db.Date
+  reservationId String   @unique @db.VarChar(80)
+
+  @@id([hallId, date])
+  @@map("reservation_slots")
+}
+
+// ————————————————————————— Desocupação —————————————————————————
+
+model MoveOut {
+  id            String        @id @db.VarChar(80)
+  reference     String        @unique @db.VarChar(20)
+  residentId    String        @db.VarChar(64)
+  residentName  String        @db.VarChar(160)
+  apartmentId   String        @db.VarChar(64)
+  block         String        @db.VarChar(4)
+  number        String        @db.VarChar(8)
+  typology      Typology
+  plannedDate   DateTime      @db.Date
+  reason        String?       @db.Text
+  contact       String        @db.VarChar(120)
+  notes         String?       @db.Text
+  status        MoveOutStatus
+  createdAt     DateTime      @db.DateTime(3)
+  financial     String        @db.Text
+  operational   String        @db.LongText
+  authorization String?       @db.Text
+  completedAt   DateTime?     @db.DateTime(3)
+  history       String        @db.LongText
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+
+  @@index([residentId])
+  @@index([status])
+  @@map("move_outs")
+}
+
+/// Um processo de desocupação activo por morador.
+model ActiveMoveOut {
+  residentId String @id @db.VarChar(64)
+  moveOutId  String @unique @db.VarChar(80)
+
+  @@map("active_moveouts")
+}
+
+// ————————————————————————— Comunicação —————————————————————————
+
+model Circular {
+  id          String   @id @db.VarChar(80)
+  sequence    Int
+  year        Int
+  number      String   @db.VarChar(40)
+  subject     String   @db.VarChar(255)
+  body        String   @db.LongText
+  closing     String?  @db.Text
+  date        DateTime @db.Date
+  status      String   @db.VarChar(20)
+  recipients  String   @db.Text
+  author      String   @db.VarChar(160)
+  authorTitle String   @db.VarChar(160)
+  publishedAt DateTime? @db.DateTime(3)
+  updatedAt   DateTime @db.DateTime(3)
+
+  @@unique([year, sequence])
+  @@map("circulars")
+}
+
+model Notice {
+  id          String    @id @db.VarChar(80)
+  title       String    @db.VarChar(255)
+  body        String    @db.LongText
+  category    String    @db.VarChar(40)
+  date        DateTime  @db.Date
+  visibility  String    @db.VarChar(20)
+  status      String    @db.VarChar(20)
+  author      String    @db.VarChar(160)
+  pinned      Boolean?
+  pdf         String?   @db.Text
+  publishedAt DateTime? @db.DateTime(3)
+  withdrawnAt DateTime? @db.DateTime(3)
+  updatedAt   DateTime  @db.DateTime(3)
+
+  @@map("notices")
+}
+
+model CondoDocument {
+  id          String   @id @db.VarChar(80)
+  title       String   @db.VarChar(255)
+  description String   @db.Text
+  category    String   @db.VarChar(40)
+  fileType    String   @db.VarChar(10)
+  size        Int
+  updatedAt   DateTime @db.Date
+  visibility  String   @db.VarChar(20)
+  uploadedBy  String   @db.VarChar(160)
+  file        String?  @db.Text
+
+  @@map("documents")
+}
+
+model Notification {
+  id         String   @id @db.VarChar(80)
+  title      String   @db.VarChar(255)
+  body       String   @db.Text
+  at         DateTime @db.DateTime(3)
+  read       Boolean
+  roles      String   @db.VarChar(255)
+  href       String?  @db.VarChar(255)
+  residentId String?  @db.VarChar(64)
+  readBy     String?  @db.Text
+
+  @@index([at])
+  @@map("notifications")
+}
+
+// ————————————————————————— Portaria —————————————————————————
+
+model Visit {
+  id          String   @id @db.VarChar(80)
+  kind        String   @db.VarChar(20)
+  residentId  String   @db.VarChar(64)
+  apartmentId String   @db.VarChar(64)
+  date        DateTime @db.Date
+  time        String   @db.VarChar(5)
+  notes       String?  @db.Text
+  guests      String   @db.LongText
+  eventName   String?  @db.VarChar(160)
+  eventType   String?  @db.VarChar(40)
+  status      String   @db.VarChar(20)
+  createdAt   DateTime @db.DateTime(3)
+  updatedAt   DateTime @db.DateTime(3)
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+  checks    VisitCheck[]
+
+  @@index([date])
+  @@index([residentId])
+  @@map("visits")
+}
+
+model VisitCheck {
+  id      String   @id @db.VarChar(80)
+  visitId String   @db.VarChar(80)
+  guestId String   @db.VarChar(80)
+  type    String   @db.VarChar(10)
+  at      DateTime @db.DateTime(3)
+  by      String   @db.VarChar(160)
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+
+  @@index([visitId])
+  @@map("visit_checks")
+}
+
+model AccessLog {
+  id          String   @id @db.VarChar(80)
+  at          DateTime @db.DateTime(3)
+  type        String   @db.VarChar(10)
+  person      String   @db.VarChar(160)
+  category    String   @db.VarChar(20)
+  apartmentId String?  @db.VarChar(64)
+  gate        String   @db.VarChar(80)
+
+  @@index([at])
+  @@map("access_logs")
+}
+
+// ————————————————————————— Operações —————————————————————————
+
+model Occurrence {
+  id          String    @id @db.VarChar(80)
+  title       String    @db.VarChar(255)
+  description String    @db.Text
+  category    String    @db.VarChar(40)
+  priority    String    @db.VarChar(10)
+  status      String    @db.VarChar(20)
+  block       String?   @db.VarChar(4)
+  apartmentId String?   @db.VarChar(64)
+  location    String    @db.VarChar(255)
+  assignee    String?   @db.VarChar(160)
+  elevatorId  String?   @db.VarChar(64)
+  residentId  String?   @db.VarChar(64)
+  photos      String?   @db.LongText
+  resolution  String?   @db.Text
+  createdAt   DateTime  @db.DateTime(3)
+  resolvedAt  DateTime? @db.DateTime(3)
+  reportedBy  String    @db.VarChar(160)
+  history     String    @db.LongText
+
+  @@index([status])
+  @@index([residentId])
+  @@map("occurrences")
+}
+
+model Elevator {
+  id              String    @id @db.VarChar(64)
+  block           String    @db.VarChar(4)
+  code            String    @db.VarChar(40)
+  status          String    @db.VarChar(20)
+  lastMaintenance DateTime? @db.Date
+  nextMaintenance DateTime? @db.Date
+  provider        String    @db.VarChar(160)
+  notes           String?   @db.Text
+  demo            Boolean
+  history         String    @db.LongText
+
+  @@map("elevators")
+}
+
+model OpsTask {
+  id            String    @id @db.VarChar(80)
+  area          String    @db.VarChar(20)
+  type          String    @db.VarChar(60)
+  title         String    @db.VarChar(255)
+  location      String    @db.VarChar(255)
+  block         String?   @db.VarChar(4)
+  responsible   String    @db.VarChar(160)
+  frequency     String?   @db.VarChar(20)
+  scheduledDate DateTime  @db.Date
+  dueDate       DateTime? @db.Date
+  executedDate  DateTime? @db.Date
+  status        String    @db.VarChar(20)
+  equipment     String?   @db.VarChar(160)
+  estimatedCost Decimal?  @db.Decimal(14, 2)
+  actualCost    Decimal?  @db.Decimal(14, 2)
+  inspection    String?   @db.Text
+  notes         String?   @db.Text
+
+  @@index([area, scheduledDate])
+  @@map("ops_tasks")
+}
+
+// ————————————————————————— Auditoria e importação —————————————————————————
+
+model AuditEntry {
+  id       String   @id @db.VarChar(80)
+  at       DateTime @db.DateTime(3)
+  by       String   @db.VarChar(160)
+  role     Role
+  action   String   @db.VarChar(120)
+  entity   String   @db.VarChar(40)
+  entityId String   @db.VarChar(80)
+  details  String?  @db.Text
+
+  @@index([at])
+  @@index([entity, entityId])
+  @@map("audit_entries")
+}
+
+/// Registo técnico de todas as operações recebidas pelo servidor (aceites e recusadas).
+model ActionLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now()) @db.DateTime(3)
+  userId     String?  @db.VarChar(64)
+  role       Role?
+  action     String   @db.VarChar(60)
+  ok         Boolean
+  error      String?  @db.VarChar(500)
+  durationMs Int
+  changes    Int      @default(0)
+
+  @@index([at])
+  @@index([userId, at])
+  @@map("action_log")
+}
+
+model ImportRun {
+  id        Int      @id @default(autoincrement())
+  at        DateTime @default(now()) @db.DateTime(3)
+  source    String   @db.VarChar(40)
+  by        String   @db.VarChar(160)
+  mode      String   @db.VarChar(40)
+  summary   String   @db.LongText
+
+  @@map("import_runs")
+}

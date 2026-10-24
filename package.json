@@ -4,19 +4,35 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:import": "tsx --tsconfig tsconfig.json scripts/db-import.ts",
+    "db:seed-users": "tsx --tsconfig tsconfig.json scripts/seed-users.ts",
+    "db:verify": "tsx --tsconfig tsconfig.json scripts/db-verify.ts",
+    "db:backup": "bash scripts/db-backup.sh",
+    "users:activation-link": "tsx --tsconfig tsconfig.json scripts/activation-link.ts",
+    "test:unit": "tsx --tsconfig tsconfig.json tests/unit.test.ts",
+    "test:api": "tsx --tsconfig tsconfig.json tests/api.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource/cormorant-garamond": "^5.3.0",
     "@hookform/resolvers": "^5.9.2",
+    "@node-rs/argon2": "^2.2.2",
+    "@prisma/adapter-mariadb": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "clsx": "^2.1.1",
+    "dotenv": "^18.0.9",
     "framer-motion": "^12.43.0",
     "jspdf": "^3.0.4",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
+    "nodemailer": "^10.2.1",
+    "prisma": "^7.10.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.90.0",
@@ -29,11 +45,13 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

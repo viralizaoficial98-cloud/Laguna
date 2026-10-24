@@ -66,7 +66,7 @@ export default function VisitasPage() {
     try {
       saveVisit({ ...v, id: uid("vis"), residentId: resident.id, apartmentId: apartment.id, status: "autorizada", createdAt: now, updatedAt: now });
       toast.success(v.kind === "grupo" ? `Grupo autorizado: ${v.guests.length} convidados` : `Visita autorizada: ${v.guests[0].name}`, {
-        description: "Disponível na área da Portaria (neste browser — demonstração).",
+        description: "Disponível de imediato na área da Portaria.",
       });
       setForm(null);
       setTab("proximas");

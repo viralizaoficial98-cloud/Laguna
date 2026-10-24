@@ -295,7 +295,7 @@ export default function ApartamentosPage() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title={`Eliminar ${deleting ? formatApt(deleting) : ""}?`}
-        description="Prefira desactivar fracções inexistentes para manter o histórico. Esta alteração é apenas local (demonstração)."
+        description="Prefira desactivar fracções inexistentes para manter o histórico. Fracções com histórico (quotas, pagamentos) não podem ser eliminadas."
         confirmLabel="Eliminar"
         onConfirm={() => {
           if (deleting) deleteApartment(deleting.id);
@@ -349,7 +349,7 @@ function ApartmentForm({ open, apartment, onClose, onSave }: { open: boolean; ap
       onClose={onClose}
       size="lg"
       title={apartment ? `Editar ${formatApt(apartment)}` : "Novo apartamento"}
-      description="Os dados são guardados apenas no browser (demonstração)."
+      description="As alterações são guardadas na base de dados."
       footer={
         <>
           <Button variant="outline" onClick={onClose}>

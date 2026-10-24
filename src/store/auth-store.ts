@@ -1,27 +1,38 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
 import type { Session } from "@/types";
 
 interface AuthState {
   session: Session | null;
+  /** Já foi verificada a sessão no servidor (cookie httpOnly). */
+  checked: boolean;
   setSession: (s: Session | null) => void;
+  load: () => Promise<Session | null>;
+  logout: () => Promise<void>;
 }
 
-/** Sessão DEMONSTRATIVA guardada no browser. Não protege dados reais. */
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      session: null,
-      setSession: (session) => set({ session }),
-    }),
-    {
-      name: "laguna-demo-session",
-      storage: createJSONStorage(() => localStorage),
-      // v3: perfil Gestor Financeiro (Saraiva) e nova matriz de permissões — sessões antigas são terminadas
-      version: 3,
-      migrate: () => ({ session: null }) as unknown as AuthState,
-    },
-  ),
-);
+/**
+ * Sessão autenticada. A credencial é um cookie httpOnly emitido pelo servidor — não é acessível ao
+ * JavaScript nem guardada no localStorage. Aqui fica apenas o perfil do utilizador em memória.
+ */
+export const useAuthStore = create<AuthState>()((set) => ({
+  session: null,
+  checked: false,
+  setSession: (session) => set({ session, checked: true }),
+  load: async () => {
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const session = res.ok ? (((await res.json()).session as Session | null) ?? null) : null;
+      set({ session, checked: true });
+      return session;
+    } catch {
+      set({ checked: true });
+      return null;
+    }
+  },
+  logout: async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    set({ session: null, checked: true });
+  },
+}));

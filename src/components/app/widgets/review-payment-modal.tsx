@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { fileSrc } from "@/lib/api-client";
 
 export const METHOD_LABELS: Record<Payment["method"], string> = {
   transferencia: "Transferência bancária",
@@ -47,7 +48,7 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
     }
     try {
       review(payment.id, d, { note: note.trim() || undefined, validatedAmount: d === "aprovado" && validated ? Number(validated) : undefined });
-      toast.success(d === "aprovado" ? "Pagamento aprovado" : "Pagamento rejeitado", { description: "Conta corrente, quota e indicadores actualizados (demonstração)." });
+      toast.success(d === "aprovado" ? "Pagamento aprovado" : "Pagamento rejeitado", { description: "Conta corrente, quota e indicadores actualizados para todos os utilizadores." });
       close();
     } catch (e) {
       // ex.: outro responsável já decidiu este comprovativo — não há decisões duplicadas
@@ -158,12 +159,13 @@ export function ReviewPaymentModal({ payment, onClose }: { payment: Payment | nu
 export function ProofPreview({ payment }: { payment: Pick<Payment, "proof"> }) {
   const p = payment.proof;
   if (!p) return <p className="rounded-2xl border border-dashed border-graphite-200 p-6 text-center text-sm text-graphite-400">Sem comprovativo.</p>;
-  if (p.dataUrl && p.type.startsWith("image/")) {
+  const src = fileSrc(p);
+  if (src && p.type.startsWith("image/")) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={p.dataUrl} alt={p.name} className="max-h-80 w-full rounded-2xl border border-graphite-100 object-contain" />;
+    return <img src={src} alt={p.name} className="max-h-80 w-full rounded-2xl border border-graphite-100 object-contain" />;
   }
-  if (p.dataUrl && p.type === "application/pdf") {
-    return <iframe src={p.dataUrl} title={p.name} className="h-80 w-full rounded-2xl border border-graphite-100" />;
+  if (src && p.type === "application/pdf") {
+    return <iframe src={src} title={p.name} className="h-80 w-full rounded-2xl border border-graphite-100" />;
   }
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-graphite-100 bg-graphite-50 p-8 text-center">
@@ -171,7 +173,7 @@ export function ProofPreview({ payment }: { payment: Pick<Payment, "proof"> }) {
         <FileText className="h-6 w-6" />
       </div>
       <p className="mt-3 text-sm font-medium break-all text-navy-900">{p.name}</p>
-      <p className="text-xs text-graphite-500">{formatBytes(p.size)} · ficheiro de demonstração</p>
+      <p className="text-xs text-graphite-500">{formatBytes(p.size)} · conteúdo do ficheiro não disponível (apenas registo do nome)</p>
     </div>
   );
 }

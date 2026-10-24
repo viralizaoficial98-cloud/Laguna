@@ -136,7 +136,7 @@ export default function ReservasPage() {
 
       {tab === "configuracao" && admin && <HallSettings />}
 
-      <DemoDataNote className="mt-6">Reservas guardadas apenas neste navegador (demonstração). A exclusividade entre utilizadores diferentes exige a base de dados partilhada.</DemoDataNote>
+      <DemoDataNote className="mt-6">Uma reserva activa por salão e data — regra garantida pelo servidor e pela base de dados para todos os utilizadores.</DemoDataNote>
       <ReservationDetail id={detail} onClose={() => setDetail(null)} />
     </>
   );

@@ -211,7 +211,7 @@ export default function MoradoresPage() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title={`Eliminar ${deleting?.name}?`}
-        description="O morador será removido e desassociado do apartamento (apenas localmente)."
+        description="O morador será removido e desassociado do apartamento (moradores com histórico não podem ser eliminados — prefira inactivar)."
         confirmLabel="Eliminar"
         onConfirm={() => {
           if (deleting) deleteResident(deleting.id);
@@ -251,7 +251,7 @@ function ResidentForm({ open, resident, onClose, onSave }: { open: boolean; resi
       onClose={onClose}
       size="xl"
       title={resident ? "Editar morador" : "Novo morador"}
-      description="Dados guardados apenas no browser (demonstração)."
+      description="As alterações são guardadas na base de dados."
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

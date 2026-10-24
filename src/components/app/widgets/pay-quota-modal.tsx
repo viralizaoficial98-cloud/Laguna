@@ -67,7 +67,7 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
     if (step === 2 && quota) {
       try {
         submitPayment({ quotaId: quota.id, apartmentId: quota.apartmentId, residentId, amount: amount ? Number(amount) : remaining, method, reference: reference.trim(), paidAt: `${paidAt}T12:00:00`, proof: proof ?? undefined });
-        toast.success("Comprovativo enviado", { description: "O pagamento ficou Em Validação (demonstração)." });
+        toast.success("Comprovativo enviado", { description: "O pagamento ficou Em Validação. O Gestor Operacional e o Gestor Financeiro foram notificados." });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Não foi possível enviar o comprovativo.");
         return;
@@ -193,7 +193,7 @@ export function PayQuotaModal({ quota, residentId, onClose }: { quota: Quota | n
                   </div>
                 </div>
               )}
-              <DemoDataNote className="mt-4">Pré-visualização local — o ficheiro não é enviado para nenhum servidor.</DemoDataNote>
+              <DemoDataNote className="mt-4">O comprovativo é guardado de forma segura no servidor e só é visível para si e para a gestão do condomínio.</DemoDataNote>
             </div>
           )}
 

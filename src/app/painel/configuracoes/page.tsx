@@ -1,23 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, Building, Check, Minus, Palette, Settings2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { DemoUser, Role } from "@/types";
 import { siteConfig } from "@/config/site";
 import { appNavigation } from "@/config/navigation";
-import { ROLES, demoUsers, roleDescriptions, roleLabels } from "@/data/users";
-import { cn, formatDateTime, uid } from "@/lib/utils";
+import { ROLES, roleDescriptions, roleLabels } from "@/data/users";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Tabs } from "@/components/ui/tabs";
-import { DataTable } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Modal } from "@/components/ui/modal";
 import { DemoBadge } from "@/components/ui/demo-badge";
 
 type Tab = "instituicao" | "utilizadores" | "perfis" | "preferencias" | "notificacoes" | "personalizacao";
@@ -26,7 +21,7 @@ export default function ConfiguracoesPage() {
   const [tab, setTab] = useState<Tab>("instituicao");
   return (
     <>
-      <PageHeader eyebrow="Administração" title="Configurações" description="Dados institucionais, utilizadores, perfis e preferências da plataforma." actions={<DemoBadge label="Alterações não persistidas" />} />
+      <PageHeader eyebrow="Administração" title="Configurações" description="Dados institucionais, utilizadores, perfis e preferências da plataforma." actions={<DemoBadge label="Preferências visuais — não guardadas" />} />
       <Tabs<Tab>
         className="mb-6"
         value={tab}
@@ -51,7 +46,7 @@ export default function ConfiguracoesPage() {
 }
 
 function saved() {
-  toast.success("Configurações guardadas (demonstração).", { description: "Serão persistidas na fase de backend." });
+  toast.info("Os dados institucionais estão definidos na configuração do portal (src/config/site.ts).", { description: "A edição pelo painel não está disponível nesta versão." });
 }
 
 function Institution() {
@@ -104,66 +99,15 @@ function Institution() {
 }
 
 function UsersTab() {
-  const [users, setUsers] = useState<Omit<DemoUser, "password">[]>(demoUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, title: u.title, status: u.status, lastAccess: u.lastAccess })));
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("morador");
-
   return (
     <Card>
-      <CardHeader title="Gestão de utilizadores" description="Contas de acesso à área privada" action={<Button size="sm" onClick={() => setOpen(true)}><UserPlus className="h-3.5 w-3.5" /> Convidar utilizador</Button>} />
-      <DataTable
-        rows={users}
-        rowKey={(u) => u.id}
-        columns={[
-          { key: "name", header: "Utilizador", primary: true, cell: (u) => <span className="flex items-center gap-3"><Avatar name={u.name} size="sm" /><span><span className="block font-medium text-navy-900">{u.name}</span><span className="block text-xs text-graphite-500">{u.email}</span></span></span> },
-          { key: "role", header: "Perfil", cell: (u) => <Badge tone="navy">{roleLabels[u.role]}</Badge> },
-          { key: "last", header: "Último acesso", cell: (u) => (u.lastAccess ? formatDateTime(u.lastAccess) : "Convite pendente"), hideOnMobile: true },
-          { key: "status", header: "Estado", cell: (u) => <StatusBadge status={u.status} /> },
-          {
-            key: "actions",
-            header: "",
-            align: "right",
-            cell: (u) => (
-              <Button size="sm" variant="ghost" onClick={() => setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, status: x.status === "activo" ? "inactivo" : "activo" } : x)))}>
-                {u.status === "activo" ? "Desactivar" : "Activar"}
-              </Button>
-            ),
-          },
-        ]}
-      />
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Convidar utilizador"
-        description="Na versão final será enviado um email de activação."
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button
-              onClick={() => {
-                if (name.trim().length < 3 || !email.includes("@")) return toast.error("Preencha nome e email válidos.");
-                setUsers((l) => [...l, { id: uid("usr"), name, email, role, title: roleLabels[role], status: "activo" }]);
-                toast.success(`Convite simulado para ${email}`);
-                setOpen(false);
-                setName("");
-                setEmail("");
-              }}
-            >
-              Convidar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Nome"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-          <Field label="Perfil">
-            <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>{ROLES.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}</Select>
-          </Field>
-        </div>
-      </Modal>
+      <CardHeader title="Gestão de utilizadores" description="As contas são geridas no módulo Gestão de Utilizadores (base de dados)." />
+      <CardBody>
+        <p className="text-sm text-graphite-600">Criação de contas, perfis, activação, bloqueio, redefinição de palavra-passe e histórico de acessos.</p>
+        <Link href="/painel/utilizadores" className={buttonClass("primary", "md", "mt-4")}>
+          <UserPlus className="h-4 w-4" /> Abrir Gestão de Utilizadores
+        </Link>
+      </CardBody>
     </Card>
   );
 }

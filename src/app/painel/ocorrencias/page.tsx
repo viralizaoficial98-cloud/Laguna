@@ -24,6 +24,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatusBadge, statusLabel, occStatus } from "@/components/ui/status-badge";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { Donut, HBars } from "@/components/charts/charts";
+import { fileSrc } from "@/lib/api-client";
 
 const PRIORITIES: OccurrencePriority[] = ["baixa", "media", "alta", "urgente"];
 const STATUSES: OccurrenceStatus[] = ["aberta", "em_analise", "em_execucao", "resolvida"];
@@ -212,12 +213,12 @@ function PhotoPicker({ photos, onChange }: { photos: { name: string; dataUrl?: s
   };
   return (
     <div>
-      <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && add(e.target.files)} />
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => e.target.files && add(e.target.files)} />
       <div className="flex flex-wrap gap-2">
         {photos.map((p, i) => (
           <span key={i} className="relative h-16 w-16 overflow-hidden rounded-lg border border-graphite-200">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {p.dataUrl && <img src={p.dataUrl} alt={p.name} className="h-full w-full object-cover" />}
+            {fileSrc(p) && <img src={fileSrc(p)} alt={p.name} className="h-full w-full object-cover" />}
             <button type="button" onClick={() => onChange(photos.filter((_, k) => k !== i))} className="absolute top-0.5 right-0.5 rounded bg-white/90 p-0.5" aria-label="Remover fotografia">
               <X className="h-3 w-3" />
             </button>
@@ -230,7 +231,7 @@ function PhotoPicker({ photos, onChange }: { photos: { name: string; dataUrl?: s
           </button>
         )}
       </div>
-      <p className="mt-1 text-[11px] text-graphite-400">Até 3 fotografias · guardadas apenas neste browser (demonstração).</p>
+      <p className="mt-1 text-[11px] text-graphite-400">Até 3 fotografias (JPG, PNG ou WEBP · máx. 5 MB) · guardadas de forma segura no servidor.</p>
     </div>
   );
 }
@@ -400,9 +401,9 @@ function OccurrenceDetail({ occurrence: o, apartmentLabel, onClose }: { occurren
           {o.photos && o.photos.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {o.photos.map((p, i) =>
-                p.dataUrl ? (
+                fileSrc(p) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={p.dataUrl} alt={p.name} className="h-24 w-24 rounded-lg border border-graphite-100 object-cover" />
+                  <img key={i} src={fileSrc(p)} alt={p.name} className="h-24 w-24 rounded-lg border border-graphite-100 object-cover" />
                 ) : (
                   <span key={i} className="rounded-lg bg-graphite-100 px-2 py-1 text-xs">{p.name}</span>
                 ),

@@ -1,26 +1,34 @@
-# Portal Residencial Laguna — Fase 1 (Frontend)
+# Portal Residencial Laguna
 
 Portal institucional e plataforma de gestão do condomínio **Residencial Laguna** (Talatona, Luanda, Angola).
 
-> **Fase 1 — apenas frontend.** Login de testes e dados demonstrativos guardados no browser.
-> Não existe base de dados, API ou autenticação real nesta fase.
+> Aplicação **full stack**: Next.js (interface e API), MySQL/MariaDB (Prisma), autenticação real com Argon2id,
+> permissões verificadas no servidor e dados partilhados entre utilizadores e dispositivos.
+> Arquitectura e segurança: [docs/BACKEND.md](docs/BACKEND.md) · Publicação: [docs/DEPLOY-HOSTINGER.md](docs/DEPLOY-HOSTINGER.md)
 
 ## Tecnologias
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Framer Motion · Recharts · React Hook Form · Zod · Zustand · Lucide · Sonner
+Next.js 16 (App Router + route handlers) · React 19 · TypeScript · Prisma 7 (MySQL/MariaDB) · Argon2id · Tailwind CSS 4 ·
+Framer Motion · Recharts · React Hook Form · Zod · Zustand · Lucide · Sonner · jsPDF
 
-## Executar
+## Executar (desenvolvimento)
 
 ```bash
-npm install
-npm run dev        # http://localhost:3000
-npm run lint
-npm run build && npm start
+cp .env.example .env          # DATABASE_URL de uma base de dados de desenvolvimento
+npm install                   # gera também o cliente Prisma
+npm run db:migrate            # cria as tabelas (prisma migrate deploy)
+npm run db:import -- --apply  # importa os dados actuais do frontend (idempotente)
+npm run db:seed-users         # cria as 5 contas (sem palavra-passe)
+npm run users:activation-link -- jose.leiria@residenciallaguna.ao   # ligação para definir a palavra-passe
+npm run dev                   # http://localhost:3000
 ```
 
-## Login demonstrativo (5 perfis)
+Verificações: `npm run lint` · `npm run build` · `npm run test:unit` · `BASE_URL=http://localhost:3000 npm run test:api`
+(apenas contra uma base de dados de teste) · `npm run db:verify`.
 
-| Nome | Email (identificador de demonstração) | Perfil |
+## Contas (cinco perfis)
+
+| Nome | Email | Perfil |
 |---|---|---|
 | José Leiria | jose.leiria@residenciallaguna.ao | Administrador do Condomínio |
 | Nelson Rodrigues | nelson.rodrigues@residenciallaguna.ao | Gestor Operacional |
@@ -28,8 +36,9 @@ npm run build && npm start
 | Manuel Muenho | manuel.muenho@residenciallaguna.ao | Morador (Bloco 06 · 201) |
 | Portaria Laguna | portaria@residenciallaguna.ao | Portaria |
 
-Palavra-passe de demonstração: `DemoLaguna2026`. Os emails são apenas identificadores de acesso — não se assume a existência
-de caixas de correio reais. Credenciais exclusivas da demo; não utilizar em produção.
+Não existem palavras-passe pré-definidas: cada conta é activada por uma ligação de utilização única. A recuperação de
+palavra-passe está em `/recuperar`; a alteração, em *Meu perfil*. Novas contas são criadas na **Gestão de Utilizadores**
+(José: todas; Nelson: contas operacionais, de moradores e de portaria).
 
 ### Experiências por perfil
 
@@ -54,24 +63,27 @@ Os custos de manutenção concluída entram nas despesas do dashboard financeiro
 src/
   app/
     (site)/          Portal público: início, sobre, infraestruturas, apartamentos, galeria, comunicados, contactos
-    login/           Login demonstrativo
-    painel/          Área privada (dashboards e módulos por perfil)
+    login/ (auth)/   Login, recuperação, activação e redefinição de palavra-passe
+    painel/          Área privada (dashboards e módulos por perfil, Gestão de Utilizadores, Importação de dados)
+    api/             Backend: auth, state, actions, files, users, import, health
   components/
     ui/              Componentes base reutilizáveis (botões, tabelas, modais, formulários…)
     site/            Componentes do portal público (header, hero, galeria/lightbox…)
     app/             Shell do painel, dashboards e widgets
     charts/          Gráficos (Recharts) com paleta validada
   config/            site.ts (dados institucionais), navigation.ts (menus e permissões por perfil)
-  data/              Dados mockados (separados da interface)
-  services/          Camada de serviços (hoje local; amanhã API)
-  store/             Estado demonstrativo (Zustand + localStorage)
+  data/              Cadastro e dados iniciais (fonte da importação inicial para a base de dados)
+  domain/            Motor de domínio (regras de negócio, partilhado cliente/servidor)
+  server/            Backend (Prisma, autenticação, transacções, ficheiros, utilizadores, importação)
+  services/          Serviços do cliente (portal público e autenticação)
+  store/             Estado no cliente sincronizado com a API (Zustand)
   hooks/ lib/ types/
 public/images/
   laguna/fachadas | lazer | areas-exteriores   Fotografias reais optimizadas (WebP)
   brand/                                        Logótipo (cor e branco)
 ```
 
-## Regras de funcionamento (Fase 1.1)
+## Regras de funcionamento
 
 - **Administrador oficial:** José Leiria (`src/config/site.ts → administrator`) — assina as circulares e aparece nos documentos gerados.
 - **Tipologias:** exclusivamente **T2** e **Duplex** (3 quartos, sala e varanda). 10 blocos · 100 apartamentos · 80 T2 + 20 Duplex.
@@ -100,10 +112,9 @@ public/images/
 - **Permissões por operação:** `src/config/permissions.ts`. As acções do estado (`src/store/demo-store.ts`) verificam o perfil e lançam
   `PermissionError`; as rotas são protegidas em `src/config/navigation.ts`.
 
-> **Importante:** nesta fase os dados ficam no `localStorage` de cada browser. Um comprovativo, reserva ou pedido de desocupação
-> submetido pelo morador só aparece para Nelson, Saraiva, José ou a Portaria **no mesmo browser**. A sincronização entre utilizadores e
-> dispositivos, a exclusividade real das reservas, as notificações e a decisão única sobre comprovativos exigem a base de dados
-> partilhada (PostgreSQL) e a autenticação da Fase 2.
+> Os dados de negócio estão na base de dados MySQL e são partilhados entre utilizadores e dispositivos (actualização
+> automática em ≤ 15 s). O armazenamento local do navegador já não é usado para dados de negócio; os dados que versões
+> anteriores deixaram num navegador podem ser migrados em **Importação de dados** (Administrador).
 
 ## Regras de conteúdo
 
@@ -113,17 +124,11 @@ public/images/
 - Todos os dados da área privada são fictícios e estão identificados como demonstração.
 - A fotografia `lazer/piscina-e-deck.webp` tem marca de água de terceiros (Angocasa) — substituir pelo original ou confirmar direitos.
 
-## Preparação para a Fase 2 (base de dados partilhada — PostgreSQL)
+## Estrutura do backend
 
-- `src/types/index.ts` espelha o futuro esquema (Apartment, Resident, Occupancy, Quota, Payment, Charge, Expense, Hall, Reservation,
-  MoveOut, AuditEntry, Circular, Visit, VisitCheck, InternalNotice com PDF…).
-- Restrições a garantir na base de dados: `UNIQUE(apartment_id, period)` nas quotas; índice único parcial em reservas
-  `(hall_id, date) WHERE status IN ('pendente_pagamento','em_validacao','confirmada')`; decisão de comprovativo por
-  `UPDATE … WHERE status = 'em_analise'` (concorrência); um processo de desocupação activo por morador.
-- Cálculo da conta corrente: `src/lib/account.ts` (função pura, reutilizável no servidor).
-- A matriz `src/config/permissions.ts` deve ser replicada no servidor (as verificações no browser não substituem a validação no backend).
-- `src/services/*` expõe funções assíncronas — substituir a implementação por chamadas à API.
-- `src/store/demo-store.ts` concentra as mutações (criar/editar/aprovar); cada acção corresponde a um endpoint futuro.
-- `src/services/auth.service.ts` → substituir por autenticação real com sessões no servidor e palavras-passe com hash.
-- Uploads de comprovativos são hoje pré-visualizados localmente (`FileReader`) — passar a upload para armazenamento seguro.
-- Permissões por perfil em `src/config/navigation.ts` (`roles`) — replicar a verificação no servidor.
+- `prisma/schema.prisma` + `prisma/migrations/` — esquema MySQL/MariaDB e migrações versionadas.
+- `src/domain/engine.ts` — regras de negócio e permissões (executadas no servidor com a sessão autenticada).
+- `src/server/*` — base de dados, autenticação, operações transaccionais, projecção por perfil, ficheiros, utilizadores, importação.
+- `src/app/api/*` — route handlers (`auth`, `state`, `actions`, `files`, `users`, `import`, `health`).
+- `scripts/*` — importação, contas iniciais, ligações de activação, verificação e cópia de segurança.
+- `tests/*` — testes unitários e de integração da API.

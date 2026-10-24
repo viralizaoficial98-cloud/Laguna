@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useCurrentResident } from "@/hooks/use-session";
-import { useAuthStore } from "@/store/auth-store";
+import { changePassword, AuthError } from "@/services/auth.service";
 import { useDemoStore } from "@/store/demo-store";
 import { roleLabels } from "@/data/users";
 import { formatDateTime } from "@/lib/utils";
@@ -25,14 +25,13 @@ const profileSchema = z.object({
 const pwSchema = z
   .object({
     current: z.string().min(1, "Indique a palavra-passe actual."),
-    next: z.string().min(8, "Mínimo de 8 caracteres.").regex(/[A-Z]/, "Inclua uma maiúscula.").regex(/\d/, "Inclua um número."),
+    next: z.string().min(10, "Mínimo de 10 caracteres.").regex(/[A-Za-zÀ-ÿ]/, "Inclua letras.").regex(/\d/, "Inclua números."),
     confirm: z.string(),
   })
   .refine((d) => d.next === d.confirm, { path: ["confirm"], message: "As palavras-passe não coincidem." });
 
 export default function PerfilPage() {
   const { session, resident } = useCurrentResident();
-  const setSession = useAuthStore((s) => s.setSession);
   const saveResident = useDemoStore((s) => s.saveResident);
 
   const profile = useForm<z.infer<typeof profileSchema>>({
@@ -64,16 +63,20 @@ export default function PerfilPage() {
                 className="grid gap-4 sm:grid-cols-2"
                 noValidate
                 onSubmit={profile.handleSubmit((d) => {
-                  setSession({ ...session, name: d.name, email: d.email });
-                  if (resident) saveResident({ ...resident, name: d.name, email: d.email, phone: d.phone ?? resident.phone });
-                  toast.success("Perfil actualizado (demonstração).");
+                  if (!resident) return toast.info("O nome e o email da conta são alterados na Gestão de Utilizadores.");
+                  try {
+                    saveResident({ ...resident, phone: d.phone ?? resident.phone });
+                    toast.success("Contacto actualizado.");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Não foi possível guardar.");
+                  }
                 })}
               >
-                <Field label="Nome" error={profile.formState.errors.name?.message} className="sm:col-span-2">
-                  <Input {...profile.register("name")} />
+                <Field label="Nome" error={profile.formState.errors.name?.message} className="sm:col-span-2" hint="Alterado pela gestão do condomínio (Gestão de Utilizadores).">
+                  <Input readOnly {...profile.register("name")} />
                 </Field>
                 <Field label="Email" error={profile.formState.errors.email?.message}>
-                  <Input type="email" {...profile.register("email")} />
+                  <Input type="email" readOnly {...profile.register("email")} />
                 </Field>
                 <Field label="Telefone">
                   <Input type="tel" {...profile.register("phone")} placeholder="+244" />
@@ -85,14 +88,19 @@ export default function PerfilPage() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title="Alterar palavra-passe" description="Simulação — as credenciais de teste não são alteradas." />
+            <CardHeader title="Alterar palavra-passe" description="Mínimo de 10 caracteres, com letras e números. As outras sessões abertas são terminadas." />
             <CardBody>
               <form
                 className="grid gap-4 sm:grid-cols-3"
                 noValidate
-                onSubmit={pw.handleSubmit(() => {
-                  pw.reset();
-                  toast.success("Palavra-passe alterada (simulação).");
+                onSubmit={pw.handleSubmit(async (d) => {
+                  try {
+                    await changePassword(d.current, d.next);
+                    pw.reset();
+                    toast.success("Palavra-passe alterada.");
+                  } catch (e) {
+                    toast.error(e instanceof AuthError ? e.message : "Não foi possível alterar a palavra-passe.");
+                  }
                 })}
               >
                 <Field label="Actual" error={pw.formState.errors.current?.message}>

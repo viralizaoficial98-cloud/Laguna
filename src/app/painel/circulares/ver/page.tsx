@@ -74,7 +74,7 @@ export default function VerCircularPage() {
               onClick={() => {
                 try {
                   saveCircular({ ...circular, status: "publicada", publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-                  toast.success("Circular publicada para os moradores (demonstração)");
+                  toast.success("Circular publicada para os moradores");
                 } catch (e) {
                   toast.error((e as Error).message);
                 }

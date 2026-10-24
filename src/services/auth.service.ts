@@ -1,32 +1,41 @@
 /**
- * Serviço de autenticação DEMONSTRATIVO (sem backend).
- * Futuro: substituir por chamada a `POST /api/auth/login` com sessão no servidor.
+ * Serviço de autenticação (cliente) — chama a API do servidor. As credenciais nunca ficam no browser:
+ * a sessão é um cookie httpOnly emitido pelo servidor.
  */
 import type { Session } from "@/types";
-import { demoUsers } from "@/data/users";
 
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    public status = 400,
+  ) {
+    super(message);
+  }
+}
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function post<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new AuthError(json.error ?? "Não foi possível concluir o pedido.", res.status);
+  return json as T;
+}
 
 export async function login(email: string, password: string): Promise<Session> {
-  await wait(650);
-  const user = demoUsers.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-  if (!user || user.password !== password) {
-    throw new AuthError("Email ou palavra-passe inválidos.");
-  }
-  if (user.status !== "activo") throw new AuthError("Esta conta está inactiva.");
-  return {
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    title: user.title,
-    residentId: user.residentId,
-    startedAt: new Date().toISOString(),
-  };
+  return (await post<{ session: Session }>("/api/auth/login", { email, password })).session;
 }
 
 export async function logout(): Promise<void> {
-  await wait(150);
+  await post("/api/auth/logout").catch(() => undefined);
+}
+
+export async function requestPasswordReset(email: string) {
+  return post<{ message: string }>("/api/auth/forgot", { email });
+}
+
+export async function setPasswordWithToken(token: string, password: string) {
+  return post<{ ok: true; email: string }>("/api/auth/reset", { token, password });
+}
+
+export async function changePassword(current: string, next: string) {
+  return post<{ ok: true }>("/api/auth/change-password", { current, next });
 }

@@ -14,6 +14,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ProofInput } from "@/components/app/widgets/proof-input";
+import { fileSrc } from "@/lib/api-client";
 
 export const CHECK_ITEMS: { key: keyof MoveOut["operational"]["checklist"]; label: string }[] = [
   { key: "apartamento", label: "Estado do apartamento" },
@@ -73,7 +74,7 @@ export function MoveOutDetail({ id }: { id: string }) {
   const [authNotes, setAuthNotes] = useState("");
   const [checklist, setChecklist] = useState(m?.operational.checklist);
   const [opNotes, setOpNotes] = useState(m?.operational.notes ?? "");
-  const [report, setReport] = useState<PaymentProof | null>(m?.operational.report ? { name: m.operational.report.name, type: "application/pdf", size: 0, dataUrl: m.operational.report.dataUrl } : null);
+  const [report, setReport] = useState<PaymentProof | null>(m?.operational.report ? { name: m.operational.report.name, type: "application/pdf", size: 0, dataUrl: m.operational.report.dataUrl, fileId: m.operational.report.fileId } : null);
   const [charge, setCharge] = useState({ description: "", justification: "", amount: "" });
   if (!m || !checklist) return null;
 
@@ -218,7 +219,18 @@ export function MoveOutDetail({ id }: { id: string }) {
                 )}
               </div>
             ))}
-            {m.operational.report && <p className="text-xs text-graphite-600">Relatório de vistoria: {m.operational.report.name}</p>}
+            {m.operational.report && (
+              <p className="text-xs text-graphite-600">
+                Relatório de vistoria:{" "}
+                {fileSrc(m.operational.report) ? (
+                  <a href={fileSrc(m.operational.report)} target="_blank" rel="noreferrer" className="font-medium text-navy-700 underline">
+                    {m.operational.report.name}
+                  </a>
+                ) : (
+                  m.operational.report.name
+                )}
+              </p>
+            )}
             {m.operational.notes && !canOp && <p className="text-xs text-graphite-600">Observações: {m.operational.notes}</p>}
             {canOp && !closed && (
               <>
@@ -227,10 +239,10 @@ export function MoveOutDetail({ id }: { id: string }) {
                 </Field>
                 <ProofInput value={report} onChange={setReport} label="Anexar relatório de vistoria (PDF ou imagem)" />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => run(() => state.saveOperationalCheck(m.id, { checklist, notes: opNotes, report: report ? { name: report.name, dataUrl: report.dataUrl } : undefined }), "Vistoria guardada")}>
+                  <Button variant="outline" onClick={() => run(() => state.saveOperationalCheck(m.id, { checklist, notes: opNotes, report: report ? { name: report.name, dataUrl: report.dataUrl, fileId: report.fileId } : undefined }), "Vistoria guardada")}>
                     Guardar
                   </Button>
-                  <Button onClick={() => run(() => state.saveOperationalCheck(m.id, { checklist, notes: opNotes, report: report ? { name: report.name, dataUrl: report.dataUrl } : undefined, conclude: true }), "Verificação operacional concluída")}>Concluir verificação</Button>
+                  <Button onClick={() => run(() => state.saveOperationalCheck(m.id, { checklist, notes: opNotes, report: report ? { name: report.name, dataUrl: report.dataUrl, fileId: report.fileId } : undefined, conclude: true }), "Verificação operacional concluída")}>Concluir verificação</Button>
                 </div>
               </>
             )}

@@ -137,7 +137,8 @@ function RequestForm({ residentName, block, number, typology, phone }: { residen
     if (!form.contact.trim()) return toast.error("Indique um contacto.");
     try {
       const m = request({ plannedDate: form.plannedDate, reason: form.reason.trim() || undefined, contact: form.contact.trim(), notes: form.notes.trim() || undefined });
-      toast.success(`Solicitação registada — processo ${m.reference}`, { description: "Gestor Operacional e Gestor Financeiro notificados." });
+      void m;
+      toast.success("Solicitação registada", { description: "Gestor Operacional e Gestor Financeiro notificados. O número do processo é apresentado na página." });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível registar.");
     }

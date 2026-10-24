@@ -27,6 +27,8 @@ import {
   PartyPopper,
   LogOut,
   Coins,
+  UserCog,
+  DatabaseZap,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/types";
@@ -124,7 +126,9 @@ export const appNavigation: AppNavGroup[] = [
   {
     label: "Administração",
     items: [
+      { href: "/painel/utilizadores", label: "Gestão de Utilizadores", icon: UserCog, roles: OPS },
       { href: "/painel/relatorios", label: "Relatórios", icon: FileText, roles: STAFF },
+      { href: "/painel/importacao", label: "Importação de dados", icon: DatabaseZap, roles: ADM },
       { href: "/painel/configuracoes", label: "Configurações", icon: Settings, roles: ADM },
     ],
   },

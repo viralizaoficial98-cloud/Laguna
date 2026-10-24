@@ -4,10 +4,11 @@ import { Download, Eye, FileSpreadsheet, FileText, FileType, Image as ImageIcon,
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { CondoDocument, DocumentCategory } from "@/types";
+import { fileSrc } from "@/lib/api-client";
 import { useDemoStore } from "@/store/demo-store";
 import { useSession } from "@/hooks/use-session";
 import { can } from "@/config/permissions";
-import { cn, downloadBlob, formatBytes, formatDate, includesText, uid } from "@/lib/utils";
+import { cn, formatBytes, formatDate, includesText, uid } from "@/lib/utils";
 import { DEMO_TODAY } from "@/data/management";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -54,9 +55,15 @@ export default function DocumentosPage() {
   const rows = useMemo(() => visible.filter((d) => (!cat || d.category === cat) && includesText([d.title, d.description], q)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [visible, cat, q]);
 
   const download = (d: CondoDocument) => {
-    const content = `RESIDENCIAL LAGUNA — DOCUMENTO DE DEMONSTRAÇÃO\n\nTítulo: ${d.title}\nCategoria: ${d.category}\nActualizado: ${formatDate(d.updatedAt)}\n\n${d.description}\n\nEste ficheiro foi gerado localmente para demonstrar a funcionalidade de download.\nO documento original será disponibilizado na fase de integração com o servidor.`;
-    downloadBlob(`${d.title.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}-demo.txt`, new Blob([content], { type: "text/plain;charset=utf-8" }));
-    toast.success("Download de demonstração iniciado.");
+    const src = fileSrc(d.file);
+    if (!src) {
+      toast.info("Este registo não tem ficheiro carregado (apenas a ficha do documento).");
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = d.file?.name ?? d.title;
+    a.click();
   };
 
   return (
@@ -163,7 +170,14 @@ export default function DocumentosPage() {
                   <div key={i} className="h-2 rounded bg-graphite-100" style={{ width: `${95 - ((i * 13) % 35)}%` }} />
                 ))}
               </div>
-              <p className="mt-6 text-[11px] text-graphite-400">Carregado por {preview.uploadedBy} · {formatDate(preview.updatedAt)}. O conteúdo integral estará disponível após integração com o servidor.</p>
+              {fileSrc(preview.file) && preview.file?.type === "application/pdf" && <iframe src={fileSrc(preview.file)} title={preview.title} className="mt-6 h-[60vh] w-full rounded-lg border border-graphite-100" />}
+              {fileSrc(preview.file) && preview.file?.type.startsWith("image/") && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fileSrc(preview.file)} alt={preview.title} className="mt-6 w-full rounded-lg border border-graphite-100" />
+              )}
+              <p className="mt-6 text-[11px] text-graphite-400">
+                Carregado por {preview.uploadedBy} · {formatDate(preview.updatedAt)}.{preview.file ? "" : " Sem ficheiro carregado (apenas a ficha do documento)."}
+              </p>
             </div>
           </div>
         )}
@@ -174,7 +188,7 @@ export default function DocumentosPage() {
         onClose={() => setUploading(false)}
         onUpload={(d) => {
           addDocument({ ...d, id: uid("doc"), updatedAt: DEMO_TODAY, uploadedBy: session?.name ?? "Administração" });
-          toast.success("Documento adicionado (apenas localmente).");
+          toast.success("Documento adicionado.");
           setUploading(false);
         }}
       />
@@ -201,13 +215,24 @@ function UploadModal({ open, onClose, onUpload }: { open: boolean; onClose: () =
   const [category, setCategory] = useState<DocumentCategory>("comunicado");
   const [visibility, setVisibility] = useState<CondoDocument["visibility"]>("moradores");
 
-  const submit = () => {
+  const submit = async () => {
     if (!file || title.trim().length < 3) {
       toast.error("Seleccione um ficheiro e indique o título.");
       return;
     }
+    if (!["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      toast.error("Formatos aceites: PDF, JPG, PNG ou WEBP (máx. 5 MB).");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
     const ext = file.name.split(".").pop()?.toLowerCase();
     onUpload({
+      file: { name: file.name, type: file.type, size: file.size, dataUrl },
       title: title.trim(),
       description: description.trim() || file.name,
       category,
@@ -221,8 +246,8 @@ function UploadModal({ open, onClose, onUpload }: { open: boolean; onClose: () =
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Carregar documento" description="Upload demonstrativo — o ficheiro não sai do seu dispositivo." footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit}>Adicionar</Button></>}>
-      <input ref={ref} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); if (!title) setTitle(f.name.replace(/\.[^.]+$/, "")); } }} />
+    <Modal open={open} onClose={onClose} title="Carregar documento" description="PDF, JPG, PNG ou WEBP (máx. 5 MB) — guardado de forma segura no servidor." footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()}>Adicionar</Button></>}>
+      <input ref={ref} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); if (!title) setTitle(f.name.replace(/\.[^.]+$/, "")); } }} />
       <button type="button" onClick={() => ref.current?.click()} className="flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-graphite-200 px-6 py-8 text-center transition hover:border-navy-300 hover:bg-navy-50/40">
         <UploadCloud className="h-8 w-8 text-navy-500" />
         <p className="mt-2 text-sm font-medium text-navy-900">{file ? file.name : "Seleccionar ficheiro"}</p>

@@ -2,8 +2,8 @@ import type { Role } from "@/types";
 
 /**
  * Permissões por OPERAÇÃO (não apenas por menu).
- * São verificadas nas páginas e nas acções do estado (src/store/demo-store.ts).
- * Na fase de backend, a mesma matriz deve ser aplicada no servidor.
+ * São verificadas nas páginas, nas acções do motor de domínio (src/domain/engine.ts) e no servidor,
+ * que executa todas as acções com a sessão autenticada (src/server/actions.ts).
  *
  *  - administrador → José Leiria (Administrador do Condomínio): gestão executiva e supervisão
  *  - gestor        → Nelson Rodrigues (Gestor Operacional): operações e validação de comprovativos
@@ -60,7 +60,10 @@ export type Permission =
   | "charges.propose"
   | "charges.confirm"
   | "documents.manage"
-  | "settings.manage";
+  | "settings.manage"
+  | "users.manage"
+  | "users.manage_privileged"
+  | "data.import";
 
 /**
  * Matriz (secção 7 do pedido):
@@ -116,6 +119,10 @@ const MATRIX: Record<Permission, Role[]> = {
   "charges.confirm": ["administrador"],
   "documents.manage": ["administrador"],
   "settings.manage": ["administrador"],
+  // Gestão de Utilizadores: Nelson gere contas operacionais, de moradores e de portaria; José gere todas
+  "users.manage": ["administrador", "gestor"],
+  "users.manage_privileged": ["administrador"],
+  "data.import": ["administrador"],
 };
 
 export function can(role: Role | undefined | null, permission: Permission) {

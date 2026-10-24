@@ -135,7 +135,7 @@ export function VisitDetailModal({ visit, onClose }: { visit: VisitRow | null; o
               </ul>
             </div>
           )}
-          <p className="text-[11px] text-graphite-400">Autorização registada pelo morador em {formatDateTime(visit.createdAt)}. Dados guardados apenas neste browser (demonstração).</p>
+          <p className="text-[11px] text-graphite-400">Autorização registada pelo morador em {formatDateTime(visit.createdAt)}.</p>
         </div>
       )}
     </Modal>

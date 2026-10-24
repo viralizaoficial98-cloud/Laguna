@@ -8,7 +8,7 @@ import { formatBytes } from "@/lib/utils";
 const MAX_SIZE = 5 * 1024 * 1024;
 const TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 
-/** Selecção local de um comprovativo/anexo (PDF ou imagem, máx. 5 MB). Não envia o ficheiro para nenhum servidor. */
+/** Selecção local de um comprovativo/anexo (PDF ou imagem, máx. 5 MB). O ficheiro é enviado para o servidor ao submeter a operação. */
 export function ProofInput({ value, onChange, label = "Seleccionar comprovativo (PDF, JPG, PNG · máx. 5 MB)" }: { value: PaymentProof | null; onChange: (p: PaymentProof | null) => void; label?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);

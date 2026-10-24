@@ -96,7 +96,7 @@ export default function CircularEditorPage() {
       if (!c) return;
       try {
         saveCircular(c);
-        toast.success(status === "publicada" ? `Circular ${c.number} publicada para os moradores (demonstração)` : `Rascunho ${c.number} guardado`);
+        toast.success(status === "publicada" ? `Circular ${c.number} publicada para os moradores` : `Rascunho ${c.number} guardado`);
         router.push(`/painel/circulares/ver?id=${c.id}`);
       } catch (e) {
         toast.error((e as Error).message);

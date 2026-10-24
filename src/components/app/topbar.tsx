@@ -1,11 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Building2, ChevronDown, ExternalLink, LogOut, Menu, RotateCcw, Search, UserRound, Users } from "lucide-react";
+import { Bell, Building2, ChevronDown, ExternalLink, LogOut, Menu, Search, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import type { Session } from "@/types";
 import { navForRole } from "@/config/navigation";
 import { can } from "@/config/permissions";
@@ -41,7 +40,7 @@ export function Topbar({ session, onMenu, onLogout }: { session: Session; onMenu
         </button>
         <GlobalSearch session={session} />
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <DemoBadge className="hidden md:inline-flex" />
+          {process.env.NEXT_PUBLIC_ENV_LABEL && <DemoBadge className="hidden md:inline-flex" label={process.env.NEXT_PUBLIC_ENV_LABEL} />}
           <Notifications session={session} />
           <ProfileMenu session={session} onLogout={onLogout} />
         </div>
@@ -187,7 +186,6 @@ function Notifications({ session }: { session: Session }) {
 function ProfileMenu({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useClickOutside(() => setOpen(false));
-  const resetDemo = useDemoStore((s) => s.resetDemo);
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 rounded-xl p-1 pr-2 transition hover:bg-graphite-100" aria-label="Menu de perfil">
@@ -212,16 +210,6 @@ function ProfileMenu({ session, onLogout }: { session: Session; onLogout: () => 
             <MenuLink href="/" icon={ExternalLink} onClick={() => setOpen(false)}>
               Portal público
             </MenuLink>
-            <button
-              onClick={() => {
-                resetDemo();
-                setOpen(false);
-                toast.success("Dados de demonstração repostos.");
-              }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-graphite-700 hover:bg-graphite-50"
-            >
-              <RotateCcw className="h-4 w-4 text-graphite-400" /> Repor dados de demonstração
-            </button>
             <div className="my-1 h-px bg-graphite-100" />
             <button onClick={onLogout} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-red-600 hover:bg-red-50">
               <LogOut className="h-4 w-4" /> Terminar sessão

@@ -5,36 +5,33 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Eye, EyeOff, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { DemoBadge } from "@/components/ui/demo-badge";
 import { Logo } from "@/components/site/logo";
-import { Avatar } from "@/components/ui/avatar";
 import { AuthError, login } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth-store";
-import { demoUsers, roleLabels, DEMO_PASSWORD } from "@/data/users";
-import { cn } from "@/lib/utils";
+import { roleLabels } from "@/data/users";
 
 const schema = z.object({
   email: z.email("Indique um email válido."),
-  password: z.string().min(6, "A palavra-passe deve ter pelo menos 6 caracteres."),
+  password: z.string().min(1, "Indique a palavra-passe."),
 });
 type FormData = z.infer<typeof schema>;
 
 export function LoginView() {
   const router = useRouter();
+  const params = useSearchParams();
   const setSession = useAuthStore((s) => s.setSession);
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -43,18 +40,14 @@ export function LoginView() {
     try {
       const session = await login(data.email, data.password);
       setSession(session);
-      toast.success(`Bem-vindo(a), ${session.name.split(" ")[0]}!`, { description: `Sessão iniciada como ${roleLabels[session.role]} (demonstração).` });
-      router.push("/painel");
+      toast.success(`Bem-vindo(a), ${session.name.split(" ")[0]}!`, { description: `Sessão iniciada como ${roleLabels[session.role]}.` });
+      const next = params.get("next");
+      router.push(next && next.startsWith("/painel") ? next : "/painel");
     } catch (e) {
       setError(e instanceof AuthError ? e.message : "Não foi possível iniciar sessão.");
     }
   };
 
-  const fill = (email: string) => {
-    setValue("email", email, { shouldValidate: true });
-    setValue("password", DEMO_PASSWORD, { shouldValidate: true });
-    setError(null);
-  };
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
@@ -80,7 +73,6 @@ export function LoginView() {
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-graphite-500 transition hover:text-navy-900">
             <ArrowLeft className="h-4 w-4" /> Voltar ao portal
           </Link>
-          <DemoBadge />
         </div>
         <div className="flex flex-1 items-center justify-center px-5 pb-10 sm:px-10">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-md">
@@ -110,42 +102,20 @@ export function LoginView() {
                 </motion.p>
               )}
               <div className="flex items-center justify-between text-xs">
-                <label className="flex items-center gap-2 text-graphite-600">
-                  <input type="checkbox" className="h-4 w-4 accent-navy-900" defaultChecked /> Manter sessão
-                </label>
-                <button type="button" className="text-graphite-500 hover:text-navy-900" onClick={() => toast.info("Recuperação de palavra-passe disponível na fase de backend.")}>
+                <span className="text-graphite-500">Sessão segura · termina por inactividade</span>
+                <Link href="/recuperar" className="text-graphite-500 hover:text-navy-900">
                   Esqueceu-se da palavra-passe?
-                </button>
+                </Link>
               </div>
               <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
                 {!isSubmitting && <LogIn className="h-4 w-4" />} Entrar
               </Button>
             </form>
 
-            <div className="mt-10 rounded-2xl border border-gold-200/70 bg-gold-50/50 p-4">
-              <p className="flex items-center gap-2 text-xs font-semibold text-gold-900">
-                <ShieldCheck className="h-4 w-4" /> Acesso de demonstração — clique para preencher
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {demoUsers.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => fill(u.email)}
-                    className={cn("flex items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 text-left transition hover:border-gold-300 hover:shadow-soft")}
-                  >
-                    <Avatar name={u.name} size="sm" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-navy-900">{u.name}</span>
-                      <span className="block truncate text-[11px] text-graphite-500">{roleLabels[u.role]}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-3 text-[11px] leading-relaxed text-gold-900/80">
-                Palavra-passe de demonstração: <code className="rounded bg-white px-1.5 py-0.5 font-mono">{DEMO_PASSWORD}</code>. Os emails são apenas identificadores de acesso da demo — não utilizar em produção.
-              </p>
-            </div>
+            <p className="mt-10 flex items-start gap-2 rounded-2xl border border-graphite-100 bg-graphite-50 p-4 text-xs leading-relaxed text-graphite-600">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-navy-700" />
+              As contas são criadas pela gestão do condomínio. Recebeu uma ligação de activação? Abra-a para definir a sua palavra-passe.
+            </p>
           </motion.div>
         </div>
       </div>

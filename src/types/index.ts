@@ -7,19 +7,6 @@
 /** Perfis de acesso: Administrador do Condomínio, Gestor Operacional, Gestor Financeiro, Morador e Portaria. */
 export type Role = "administrador" | "gestor" | "financeiro" | "morador" | "porteiro";
 
-export interface DemoUser {
-  id: string;
-  name: string;
-  email: string;
-  /** Apenas para o login demonstrativo. Nunca guardar palavras-passe assim em produção. */
-  password: string;
-  role: Role;
-  title: string;
-  residentId?: string;
-  phone?: string;
-  status: "activo" | "inactivo";
-  lastAccess?: string;
-}
 
 export interface Session {
   userId: string;
@@ -157,8 +144,10 @@ export interface PaymentProof {
   name: string;
   type: string;
   size: number;
-  /** Pré-visualização local (data URL). Não é enviado para nenhum servidor. */
+  /** Conteúdo em memória antes do envio (data URL). Depois do envio fica apenas `fileId`. */
   dataUrl?: string;
+  /** Ficheiro guardado no servidor (fora de directórios públicos), servido por /api/files/:id com controlo de acesso. */
+  fileId?: string;
 }
 
 export interface Payment {
@@ -222,6 +211,8 @@ export interface NoticeAttachment {
   size: number;
   /** PDF em data URL — apenas em memória/localStorage do browser nesta fase. */
   dataUrl?: string;
+  /** Ficheiro guardado no servidor (fora de directórios públicos), servido por /api/files/:id com controlo de acesso. */
+  fileId?: string;
 }
 
 export type NoticeStatus = "rascunho" | "publicado" | "retirado";
@@ -405,7 +396,7 @@ export interface MoveOut {
   operational: {
     status: "pendente" | "concluida";
     checklist: Record<"apartamento" | "ocorrencias" | "equipamentos" | "chaves" | "danos" | "outras", { state: CheckState; notes?: string }>;
-    report?: { name: string; dataUrl?: string };
+    report?: { name: string; dataUrl?: string; fileId?: string };
     by?: string;
     at?: string;
     notes?: string;
@@ -463,7 +454,7 @@ export interface Occurrence {
   elevatorId?: string;
   /** Morador que submeteu a ocorrência (quando aplicável). */
   residentId?: string;
-  photos?: { name: string; dataUrl?: string }[];
+  photos?: { name: string; dataUrl?: string; fileId?: string }[];
   resolution?: string;
   createdAt: string;
   resolvedAt?: string;
@@ -564,6 +555,8 @@ export interface CondoDocument {
   updatedAt: string;
   visibility: "publico" | "moradores" | "administracao";
   uploadedBy: string;
+  /** Ficheiro do documento (quando carregado). */
+  file?: PaymentProof;
 }
 
 export interface AppNotification {
@@ -574,4 +567,8 @@ export interface AppNotification {
   read: boolean;
   roles: Role[];
   href?: string;
+  /** Destinatário específico (morador). Sem valor = todos os utilizadores dos perfis indicados. */
+  residentId?: string;
+  /** Utilizadores que já leram (o campo `read` é calculado por utilizador no servidor). */
+  readBy?: string[];
 }
