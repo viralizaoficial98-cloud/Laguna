@@ -30,9 +30,10 @@ import { IconBtn } from "@/components/ui/icon-button";
 
 const schema = z.object({
   name: z.string().min(3, "Indique o nome completo."),
-  email: z.email("Email inválido."),
-  phone: z.string().min(9, "Telefone inválido."),
-  documentId: z.string().min(5, "Indique o n.º do documento."),
+  // contactos e documento facultativos no cadastro administrativo (o morador pode não usar o portal)
+  email: z.union([z.literal(""), z.email("Email inválido.")]),
+  phone: z.string().refine((v) => !v || v.replace(/\D/g, "").length >= 9, "Telefone inválido."),
+  documentId: z.string(),
   apartmentId: z.string().optional(),
   type: z.enum(["proprietario", "inquilino"]),
   status: z.enum(["activo", "inactivo"]),
@@ -264,13 +265,13 @@ function ResidentForm({ open, resident, onClose, onSave }: { open: boolean; resi
           <Field label="Nome completo" required error={errors.name?.message} className="lg:col-span-2">
             <Input {...register("name")} invalid={!!errors.name} />
           </Field>
-          <Field label="Documento de identificação" required error={errors.documentId?.message}>
+          <Field label="Documento de identificação" hint="Opcional" error={errors.documentId?.message}>
             <Input {...register("documentId")} invalid={!!errors.documentId} />
           </Field>
-          <Field label="Email" required error={errors.email?.message}>
+          <Field label="Email" hint="Opcional" error={errors.email?.message}>
             <Input type="email" {...register("email")} invalid={!!errors.email} />
           </Field>
-          <Field label="Telefone" required error={errors.phone?.message}>
+          <Field label="Telefone" hint="Opcional" error={errors.phone?.message}>
             <Input type="tel" {...register("phone")} invalid={!!errors.phone} />
           </Field>
           <Field label="Apartamento">

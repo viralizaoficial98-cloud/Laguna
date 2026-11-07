@@ -13,7 +13,7 @@ import { BLOCKS } from "@/data/management";
 import { downloadCsv, formatDate, formatKz, formatQuarter, includesText } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { SearchInput } from "@/components/ui/search-input";
 import { Input, Select } from "@/components/ui/field";
@@ -24,7 +24,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { IconBtn } from "@/components/ui/icon-button";
 import { DemoDataNote } from "@/components/ui/demo-badge";
 import { METHOD_LABELS, ReviewPaymentModal } from "@/components/app/widgets/review-payment-modal";
-import { RegisterPaymentModal } from "@/components/app/widgets/register-payment-modal";
+import Link from "next/link";
 
 type TabId = "todos" | QuotaStatus | "historico";
 
@@ -44,7 +44,6 @@ export default function PagamentosPage() {
   const [block, setBlock] = useState("");
   const [apt, setApt] = useState("");
   const [selected, setSelected] = useState<Payment | null>(null);
-  const [registering, setRegistering] = useState(false);
   const canRegister = can(session?.role, "payments.register");
 
   const years = useMemo(() => Array.from(new Set(quotas.map((x) => x.year))).sort().reverse(), [quotas]);
@@ -126,9 +125,9 @@ export default function PagamentosPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             {canRegister && (
-              <Button onClick={() => setRegistering(true)}>
-                <Plus className="h-4 w-4" /> Registar pagamento
-              </Button>
+              <Link href="/painel/pagamento-presencial" className={buttonClass("primary")}>
+                <Plus className="h-4 w-4" /> Registar pagamento de morador
+              </Link>
             )}
             <Button variant="outline" onClick={exportCsv}>
               <Download className="h-4 w-4" /> Exportar CSV
@@ -259,7 +258,7 @@ export default function PagamentosPage() {
         )}
       </Card>
       <ReviewPaymentModal payment={selected} onClose={() => setSelected(null)} />
-      {canRegister && <RegisterPaymentModal open={registering} onClose={() => setRegistering(false)} />}
+
     </>
   );
 }

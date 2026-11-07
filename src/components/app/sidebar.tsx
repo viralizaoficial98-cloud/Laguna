@@ -14,7 +14,10 @@ import { Avatar } from "@/components/ui/avatar";
 export function SidebarContent({ session, onNavigate, onLogout, onClose }: { session: Session; onNavigate?: () => void; onLogout: () => void; onClose?: () => void }) {
   const pathname = usePathname();
   const groups = navForRole(session.role);
-  const isActive = (href: string) => (href === "/painel" ? pathname === "/painel" : pathname === href || pathname.startsWith(href + "/"));
+  // o item activo é o de caminho mais específico (ex.: /painel/declaracoes/emitir em vez de /painel/declaracoes)
+  const hrefs = groups.flatMap((g) => g.items.map((i) => i.href)).filter((h) => (h === "/painel" ? pathname === "/painel" : pathname === h || pathname.startsWith(h + "/")));
+  const best = hrefs.sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === best;
 
   return (
     <div className="flex h-full flex-col bg-navy-950 text-navy-100">

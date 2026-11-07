@@ -18,6 +18,7 @@ import { OpsAlerts } from "@/components/app/widgets/ops-alerts";
 import { Welcome } from "./welcome";
 import { PendingPayments } from "@/components/app/widgets/pending-payments";
 import { MoveOutQueue } from "@/components/app/widgets/moveout-queue";
+import { GestorManagement } from "./gestor-management";
 
 const AREA: Record<string, string> = { limpeza: "Limpeza", jardinagem: "Jardinagem", manutencao: "Manutenção" };
 
@@ -59,9 +60,12 @@ export function GestorDashboard({ session }: { session: Session }) {
 
   return (
     <>
-      <Welcome name={session.name} subtitle="Gestor Operacional · centro de operações do Residencial Laguna" image="/images/laguna/lazer/piscina-e-deck.webp">
+      <Welcome name={session.name} subtitle="Gestor Operacional · centro de gestão do Residencial Laguna" image="/images/laguna/lazer/piscina-e-deck.webp">
         <div className="flex flex-wrap gap-2">
-          <Link href="/painel/ocorrencias?nova=1" className={buttonClass("gold")}>
+          <Link href="/painel/pagamento-presencial" className={buttonClass("gold")}>
+            Registar pagamento
+          </Link>
+          <Link href="/painel/ocorrencias?nova=1" className={buttonClass("outline", "md", "border-white/20 bg-white/5 text-white hover:bg-white/10")}>
             <ShieldAlert className="h-4 w-4" /> Registar ocorrência
           </Link>
           <Link href="/painel/elevadores" className={buttonClass("outline", "md", "border-white/20 bg-white/5 text-white hover:bg-white/10")}>
@@ -69,6 +73,7 @@ export function GestorDashboard({ session }: { session: Session }) {
           </Link>
         </div>
       </Welcome>
+      <GestorManagement />
       <div className="mb-3 flex justify-end">
         <DemoDataNote>Situação actual · actividades concluídas nos últimos 30 dias</DemoDataNote>
       </div>

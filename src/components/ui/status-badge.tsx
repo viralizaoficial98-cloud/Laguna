@@ -70,6 +70,19 @@ const MAP: Record<string, { label: string; tone: BadgeTone }> = {
   proposto: { label: "Proposto", tone: "gold" },
   confirmado: { label: "Confirmado", tone: "warning" },
   anulado: { label: "Anulado", tone: "neutral" },
+  // despesas
+  aprovada: { label: "Aprovada", tone: "info" },
+  paga: { label: "Paga", tone: "success" },
+  parcialmente_paga: { label: "Parcialmente paga", tone: "gold" },
+  anulada: { label: "Anulada", tone: "neutral" },
+  // declarações
+  decl_solicitada: { label: "Solicitada", tone: "navy" },
+  decl_em_analise: { label: "Em análise", tone: "info" },
+  decl_aguardando_assinatura: { label: "A aguardar assinatura", tone: "gold" },
+  decl_emitida: { label: "Emitida", tone: "success" },
+  decl_rejeitada: { label: "Rejeitada", tone: "danger" },
+  decl_cancelada: { label: "Cancelada", tone: "neutral" },
+  decl_anulada: { label: "Anulada", tone: "warning" },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

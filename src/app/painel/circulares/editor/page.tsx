@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import type { Circular, CircularRecipients } from "@/types";
 import { useDemoStore } from "@/store/demo-store";
+import { useSession } from "@/hooks/use-session";
 import { siteConfig } from "@/config/site";
 import { todayISO, uid } from "@/lib/utils";
 import { circularNumber, nextCircularSequence, recipientSummary } from "@/lib/circular";
@@ -34,6 +35,7 @@ type FormData = z.infer<typeof schema>;
 export default function CircularEditorPage() {
   const params = useSearchParams();
   const router = useRouter();
+  const session = useSession();
   const circulars = useDemoStore((s) => s.circulars);
   const saveCircular = useDemoStore((s) => s.saveCircular);
   const existing = circulars.find((c) => c.id === params.get("id"));
@@ -83,8 +85,9 @@ export default function CircularEditorPage() {
       date: d.date,
       recipients,
       status,
-      author: siteConfig.administrator.name,
-      authorTitle: siteConfig.administrator.title,
+      // emitida sob a responsabilidade de quem a publica (Administrador ou Gestor Operacional)
+      author: session?.name ?? siteConfig.administrator.name,
+      authorTitle: session?.title ?? siteConfig.administrator.title,
       publishedAt: status === "publicada" ? existing?.publishedAt ?? new Date().toISOString() : existing?.publishedAt,
       updatedAt: new Date().toISOString(),
     };
@@ -118,7 +121,7 @@ export default function CircularEditorPage() {
           subject: values.subject ?? "",
           body: values.body ?? "",
           closing: values.closing ?? "",
-          author: siteConfig.administrator.name,
+          author: session?.name ?? siteConfig.administrator.name,
           recipients,
           status: existing?.status === "publicada" ? "publicada" : "rascunho",
         }}
@@ -131,7 +134,7 @@ export default function CircularEditorPage() {
       <PageHeader
         eyebrow="Circulares"
         title={existing ? `Editar circular ${existing.number}` : "Emitir circular"}
-        description={`Modelo oficial da Administração · emitida por ${siteConfig.administrator.name}, ${siteConfig.administrator.title}.`}
+        description={`Modelo oficial da Administração · emitida por ${session?.name ?? siteConfig.administrator.name}, ${session?.title ?? siteConfig.administrator.title}.`}
         actions={
           <>
             <Link href="/painel/circulares" className={buttonClass("ghost")}>
@@ -175,7 +178,7 @@ export default function CircularEditorPage() {
                 <Textarea rows={3} {...register("closing")} />
               </Field>
               <div className="rounded-xl bg-graphite-50 p-3 text-xs text-graphite-600 sm:col-span-2">
-                Assinatura: <strong>{siteConfig.administrator.signatureTitle} — {siteConfig.administrator.name}</strong>. É reservado espaço para assinatura e carimbo;
+                Assinatura: <strong>{session?.role === "gestor" ? "O Gestor Operacional" : siteConfig.administrator.signatureTitle} — {session?.name ?? siteConfig.administrator.name}</strong>. É reservado espaço para assinatura e carimbo;
                 a assinatura digital só será aplicada quando estiver configurada e autorizada.
               </div>
             </form>

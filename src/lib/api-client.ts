@@ -43,3 +43,24 @@ export function fileSrc(f?: { dataUrl?: string; fileId?: string } | null) {
   if (!f) return undefined;
   return f.dataUrl ?? (f.fileId ? `/api/files/${f.fileId}` : undefined);
 }
+
+/** Pedido JSON à API; lança Error com a mensagem do servidor em caso de recusa. */
+export async function apiJson<T>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+  const { json, ...rest } = init ?? {};
+  const res = await fetch(url, {
+    ...rest,
+    cache: "no-store",
+    headers: json !== undefined ? { "Content-Type": "application/json", ...(rest.headers ?? {}) } : rest.headers,
+    body: json !== undefined ? JSON.stringify(json) : rest.body,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Erro ${res.status}`);
+  return data as T;
+}
+
+/** Chave anti-duplicação para formulários (uma por abertura do formulário). */
+export function formKey() {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
+}

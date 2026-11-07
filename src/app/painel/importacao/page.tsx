@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { useDemoStore } from "@/store/demo-store";
 import { downloadBlob } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
+import { Tabs } from "@/components/ui/tabs";
+import { ExcelImport } from "@/components/app/mgmt/excel-import";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -51,7 +53,7 @@ const short = (v: unknown) => {
   return s === undefined ? "—" : s.length > 80 ? `${s.slice(0, 80)}…` : s;
 };
 
-export default function ImportacaoPage() {
+function BrowserImport() {
   const refresh = useDemoStore((s) => s.refresh);
   const [local, setLocal] = useState<{ raw: string; version?: number; counts: Record<string, number> } | null>(null);
   const [source, setSource] = useState<{ name: string; data: unknown } | null>(null);
@@ -117,7 +119,6 @@ export default function ImportacaoPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Administração" title="Importação de dados" description="Migração dos dados guardados apenas num navegador (versões anteriores do portal) para a base de dados — com pré-visualização, relatório de conflitos e confirmação." />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="Dados deste navegador" description="Versões anteriores guardavam os dados no armazenamento local do navegador." action={<HardDrive className="h-4 w-4 text-graphite-400" />} />
@@ -278,6 +279,21 @@ export default function ImportacaoPage() {
           </CardBody>
         </Card>
       )}
+    </>
+  );
+}
+
+export default function ImportacaoPage() {
+  const [tab, setTab] = useState<"excel" | "navegador">("excel");
+  return (
+    <>
+      <PageHeader
+        eyebrow="Administração"
+        title="Importação de dados"
+        description="Ficheiros Excel do condomínio (fracções, proprietários e inquilinos; mapa de gastos; execução orçamental) e dados guardados em navegadores de versões anteriores — sempre com pré-visualização, relatório de conflitos, cópia de segurança e confirmação."
+      />
+      <Tabs className="mb-6 w-fit" value={tab} onChange={setTab} tabs={[{ id: "excel", label: "Ficheiros Excel" }, { id: "navegador", label: "Dados do navegador" }]} />
+      {tab === "excel" ? <ExcelImport /> : <BrowserImport />}
     </>
   );
 }
