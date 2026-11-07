@@ -76,6 +76,9 @@ export function diffState(before: DemoData, after: DemoData): { diffs: Diff[]; s
 export async function persistDiff(tx: Tx, before: DemoData, after: DemoData) {
   const { diffs, settingsChanged } = diffState(before, after);
   const by = new Map(diffs.map((d) => [d.collection, d]));
+  // a auditoria é inalterável: nenhuma operação pode apagar ou modificar registos de auditoria
+  const auditDiff = by.get("audit");
+  if (auditDiff && (auditDiff.removed.length || auditDiff.changed.length)) throw new Error("Operação recusada: o histórico de auditoria não pode ser alterado nem eliminado.");
   let changes = 0;
   // eliminações: filhos antes dos pais
   for (const c of [...WRITE_ORDER].reverse()) {
@@ -102,7 +105,13 @@ export async function persistDiff(tx: Tx, before: DemoData, after: DemoData) {
     const touched = [...d.added, ...d.changed];
     if (!touched.length) continue;
     if (c === "reservations") await syncReservationSlots(tx, touched as unknown as DemoData["reservations"]);
-    if (c === "payments") await syncPendingPayments(tx, touched as unknown as DemoData["payments"]);
+    if (c === "payments") {
+      await syncPendingPayments(tx, touched as unknown as DemoData["payments"]);
+      // comprovativos carregados pela gestão ficam associados à fracção e ao morador (acesso do morador)
+      for (const p of touched as unknown as DemoData["payments"]) {
+        if (p.proof?.fileId) await tx.storedFile.updateMany({ where: { id: p.proof.fileId }, data: { apartmentId: p.apartmentId, residentId: p.residentId ?? null, category: "proof" } });
+      }
+    }
     if (c === "moveOuts") await syncActiveMoveOuts(tx, touched as unknown as DemoData["moveOuts"]);
   }
   if (settingsChanged) {

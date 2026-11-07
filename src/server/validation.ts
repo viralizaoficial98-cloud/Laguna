@@ -21,8 +21,16 @@ const SCHEMAS: Partial<Record<string, z.ZodType>> = {
     z.tuple([id, z.enum(["aprovado", "rejeitado"])]),
     z.tuple([id, z.enum(["aprovado", "rejeitado"]), z.object({ note: text().optional(), validatedAmount: money.optional() })]),
   ]),
-  registerPayment: z.tuple([z.object({ quotaId: id, amount: money, method, reference: text(120), paidAt: isoDate, note: text().optional() })]),
-  addExpense: z.tuple([z.object({ date: isoDate, category: text(40), description: text(255).min(1), amount: money })]),
+  registerPayment: z.tuple([
+    z.object({ quotaId: id, amount: money, method, reference: text(120).optional(), paidAt: z.string().max(40).min(10), note: text().optional(), proof: file.optional(), validate: z.boolean().optional(), clientKey: text(80).optional() }).passthrough(),
+  ]),
+  addExpense: z.tuple([z.object({ date: isoDate, category: text(40), description: text(255).min(1), amount: money, vat: z.number().finite().min(0).max(1_000_000_000).optional(), withholding: z.number().finite().min(0).max(1_000_000_000).optional() }).passthrough()]),
+  updateExpense: z.union([z.tuple([id, z.object({}).passthrough()]), z.tuple([id, z.object({}).passthrough(), text(500).optional()])]),
+  approveExpense: z.tuple([id]),
+  payExpense: z.tuple([id, z.object({ date: isoDate, amount: money, method: text(40).optional(), reference: text(120).optional() })]),
+  voidExpense: z.tuple([id, text(500)]),
+  saveSupplier: z.tuple([z.object({ name: text(200).min(1), nif: text(40).optional() }).passthrough()]),
+  archiveSupplier: z.tuple([id, z.boolean()]),
   requestReservation: z.union([
     z.tuple([z.object({ hallId: id, date: isoDate, startTime: z.string().regex(/^\d{2}:\d{2}$/), endTime: z.string().regex(/^\d{2}:\d{2}$/), eventType: text(60), eventName: text(160).min(1), expectedGuests: z.number().int().min(0).max(2000), guests, notes: text().optional() })]),
     z.tuple([

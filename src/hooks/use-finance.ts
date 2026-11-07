@@ -65,7 +65,8 @@ export function useFinance(filter: FinanceFilter = {}) {
         description: t.title,
         amount: t.actualCost!,
       }));
-    const allExpenses = [...fixedExpenses, ...maintenanceExpenses];
+    // despesas anuladas não contam; IVA incluído no custo quando existe (valor da factura)
+    const allExpenses = [...fixedExpenses.filter((e) => e.status !== "anulada"), ...maintenanceExpenses];
     // despesas e reservas são do condomínio: não se filtram por bloco/tipologia
     const expenses = allExpenses.filter((e) => inPeriod(e.period, f));
     const expensesTotal = expenses.reduce((a, e) => a + e.amount, 0);

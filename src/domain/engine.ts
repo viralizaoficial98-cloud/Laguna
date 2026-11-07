@@ -30,6 +30,8 @@ import type {
   Elevator,
   ElevatorStatus,
   Expense,
+  PaymentMethod,
+  Supplier,
   GuestPresence,
   InternalNotice,
   Occurrence,
@@ -74,6 +76,7 @@ export interface DemoData {
   elevators: Elevator[];
   opsTasks: OpsTask[];
   expenses: Expense[];
+  suppliers: Supplier[];
   accessLogs: AccessLog[];
   documents: CondoDocument[];
   notifications: AppNotification[];
@@ -101,9 +104,30 @@ export interface DemoActions {
   /** Decisão ÚNICA sobre um comprovativo (Nelson, Saraiva ou José). Lança erro se já tiver sido decidido. */
   reviewPayment: (paymentId: string, decision: "aprovado" | "rejeitado", opts?: { note?: string; validatedAmount?: number }) => void;
   /** Gestor Financeiro: regista um pagamento recebido (ex.: numerário), já validado. */
-  registerPayment: (input: { quotaId: string; amount: number; method: Payment["method"]; reference: string; paidAt: string; note?: string }) => Payment;
-  addExpense: (e: Omit<Expense, "id" | "period">) => void;
+  /**
+   * Pagamento registado pela gestão em nome do morador (presencial, transferência, numerário…).
+   * Comprovativo facultativo; `validate` aprova de imediato (com recibo) quando o perfil pode validar;
+   * caso contrário fica Em Validação. `clientKey` impede duplicações por reenvio ou clique repetido.
+   */
+  registerPayment: (input: {
+    quotaId: string;
+    amount: number;
+    method: Payment["method"];
+    reference?: string;
+    paidAt: string;
+    note?: string;
+    proof?: PaymentProof;
+    validate?: boolean;
+    clientKey?: string;
+  }) => Payment;
+  addExpense: (e: Omit<Expense, "id" | "period">) => Expense;
+  updateExpense: (id: string, patch: Partial<Omit<Expense, "id" | "period" | "payments" | "paidAmount" | "history">>, note?: string) => void;
+  approveExpense: (id: string) => void;
+  payExpense: (id: string, p: { date: string; amount: number; method?: PaymentMethod; reference?: string }) => void;
+  voidExpense: (id: string, reason: string) => void;
   deleteExpense: (id: string) => void;
+  saveSupplier: (s: Supplier) => Supplier;
+  archiveSupplier: (id: string, archived: boolean) => void;
   saveHall: (h: Hall) => void;
   requestReservation: (input: Pick<Reservation, "hallId" | "date" | "startTime" | "endTime" | "eventType" | "eventName" | "expectedGuests" | "guests" | "notes">, opts?: { waitlist?: boolean }) => Reservation;
   submitReservationPayment: (id: string, input: { reference: string; proof?: PaymentProof }) => void;
@@ -159,6 +183,7 @@ export function initialData(): DemoData {
     elevators: seedElevators,
     opsTasks: seedOpsTasks,
     expenses: seedExpenses,
+    suppliers: [],
     accessLogs: seedAccessLogs,
     documents: seedDocuments,
     notifications: seedNotifications,
@@ -187,6 +212,7 @@ export function emptyData(): DemoData {
     elevators: [],
     opsTasks: [],
     expenses: [],
+    suppliers: [],
     accessLogs: [],
     documents: [],
     notifications: [],
@@ -213,6 +239,7 @@ export const COLLECTIONS = [
   "elevators",
   "opsTasks",
   "expenses",
+  "suppliers",
   "accessLogs",
   "documents",
   "notifications",
@@ -475,12 +502,17 @@ export function createActions(set: DomainSet, get: DomainGet): DemoActions {
         assertCan("payments.register");
         const sess = session()!;
         const s = get();
+        // reenvio do mesmo formulário (duplo clique, ligação lenta) → recusado, sem novo pagamento
+        if (input.clientKey && s.payments.some((p) => p.clientKey === input.clientKey)) throw new Error("Este pagamento já foi registado (pedido repetido).");
         const quota = s.quotas.find((q) => q.id === input.quotaId);
-        if (!quota) throw new Error("Quota inexistente.");
+        if (!quota) throw new Error("Seleccione a fracção e a quota.");
         if (s.payments.some((p) => p.quotaId === quota.id && p.status === "em_analise")) throw new Error("Existe um comprovativo em validação para esta quota — decida-o primeiro.");
-        const remaining = quota.amount - quota.paidAmount;
-        if (input.amount <= 0 || input.amount > remaining) throw new Error(`Valor inválido. Montante em dívida: ${remaining.toLocaleString("pt-AO")} Kz.`);
+        const remaining = Math.round((quota.amount - quota.paidAmount) * 100) / 100;
+        if (remaining <= 0) throw new Error("Esta quota já se encontra paga.");
+        if (!(input.amount > 0) || input.amount > remaining) throw new Error(`Valor inválido. Montante em dívida nesta quota: ${remaining.toLocaleString("pt-AO")} Kz.`);
         if (input.amount < remaining && !s.settings.allowPartial) throw new Error("Os pagamentos parciais não estão autorizados.");
+        if (!input.paidAt || input.paidAt.slice(0, 10) > todayISO()) throw new Error("Indique uma data de pagamento válida (não futura).");
+        const approve = input.validate !== false && can(sess.role, "payments.review");
         const now = new Date().toISOString();
         const apt = s.apartments.find((a) => a.id === quota.apartmentId);
         const payment: Payment = {
@@ -490,35 +522,151 @@ export function createActions(set: DomainSet, get: DomainGet): DemoActions {
           residentId: apt?.residentId,
           amount: input.amount,
           method: input.method,
-          reference: input.reference,
-          paidAt: `${input.paidAt}T12:00:00`,
+          reference: (input.reference ?? "").trim(),
+          paidAt: `${input.paidAt.slice(0, 10)}T12:00:00`,
           submittedAt: now,
-          status: "aprovado",
-          reviewedBy: sess.name,
-          reviewedByRole: sess.role,
-          reviewedAt: now,
-          validatedAmount: input.amount,
+          proof: input.proof,
+          status: approve ? "aprovado" : "em_analise",
+          ...(approve ? { reviewedBy: sess.name, reviewedByRole: sess.role, reviewedAt: now, validatedAmount: input.amount, receiptNumber: receiptNumber() } : {}),
           registeredBy: sess.name,
-          note: input.note,
-          receiptNumber: receiptNumber(),
+          submittedBy: sess.name,
+          channel: "presencial",
+          clientKey: input.clientKey,
+          note: input.note?.trim() || undefined,
         };
         const payments = [payment, ...s.payments];
+        const recomputed = quotaStatusFrom(quota, payments.filter((p) => p.quotaId === quota.id));
         set({
           payments,
-          quotas: s.quotas.map((q) => (q.id === quota.id ? { ...q, ...quotaStatusFrom(q, payments.filter((p) => p.quotaId === q.id)), paymentId: payment.id } : q)),
-          audit: [audit("Pagamento registado", "payment", payment.id, `${quota.description} · ${input.amount} Kz · ${input.method}`), ...s.audit],
+          quotas: s.quotas.map((q) => (q.id === quota.id ? { ...q, ...recomputed, paymentId: payment.id } : q)),
+          notifications: approve
+            ? [notif("Pagamento registado pela gestão", `${quota.description} — ${input.amount.toLocaleString("pt-AO")} Kz · recibo ${payment.receiptNumber}`, ["morador"], "/painel/minhas-quotas", payment.residentId), ...s.notifications]
+            : [notif("Pagamento presencial para validação", `${apt ? `Bloco ${apt.block} · ${apt.number}` : ""} · ${quota.description} · ${input.amount.toLocaleString("pt-AO")} Kz${input.proof ? "" : " · sem comprovativo"}`, ["gestor", "financeiro"], "/painel/pagamentos"), ...s.notifications],
+          audit: [audit(approve ? "Pagamento presencial registado e validado" : "Pagamento presencial registado (em validação)", "payment", payment.id, `${quota.description} · ${input.amount} Kz · ${input.method}${input.proof ? ` · comprovativo ${input.proof.name}` : " · sem comprovativo"}`), ...s.audit],
         });
         return payment;
       },
 
       addExpense: (e) => {
         assertCan("expenses.manage");
-        const exp: Expense = { ...e, id: nid("exp"), period: quarterOf(e.date) };
-        set((s) => ({ expenses: [exp, ...s.expenses], audit: [audit("Despesa registada", "expense", exp.id, `${e.category} · ${e.amount} Kz`), ...s.audit] }));
+        const sess = session()!;
+        if (!e.description?.trim() || !(e.amount > 0)) throw new Error("Indique a descrição e o valor da despesa.");
+        if (!e.date) throw new Error("Indique a data da despesa.");
+        const s = get();
+        if (e.invoiceRef && (e.supplierId || e.nif) && s.expenses.some((x) => x.status !== "anulada" && x.invoiceRef === e.invoiceRef && ((e.supplierId && x.supplierId === e.supplierId) || (e.nif && x.nif === e.nif))))
+          throw new Error(`Já existe uma despesa com a factura ${e.invoiceRef} deste fornecedor.`);
+        const vat = e.vat ?? 0;
+        const withholding = e.withholding ?? 0;
+        const now = new Date().toISOString();
+        const exp: Expense = {
+          ...e,
+          id: nid("exp"),
+          period: quarterOf(e.date),
+          vat,
+          withholding,
+          netAmount: e.netAmount ?? Math.round((e.amount + vat - withholding) * 100) / 100,
+          status: e.status ?? "pendente",
+          paidAmount: e.paidAmount ?? (e.status === "paga" ? Math.round((e.amount + vat - withholding) * 100) / 100 : 0),
+          createdBy: sess.name,
+          history: [...(e.history ?? []), { at: now, by: sess.name, text: e.source ? `Importada de ${e.source.file} (linha ${e.source.row}).` : "Despesa registada." }],
+        };
+        set((st) => ({ expenses: [exp, ...st.expenses], audit: [audit("Despesa registada", "expense", exp.id, `${e.category} · ${e.amount} Kz${e.invoiceRef ? ` · ${e.invoiceRef}` : ""}`), ...st.audit] }));
+        return exp;
+      },
+      updateExpense: (id, patch, note) => {
+        assertCan("expenses.manage");
+        const sess = session()!;
+        const s = get();
+        const cur = s.expenses.find((x) => x.id === id);
+        if (!cur) throw new Error("Despesa inexistente.");
+        if (cur.status === "anulada") throw new Error("Despesa anulada — não pode ser alterada.");
+        const next: Expense = { ...cur, ...patch, id, period: quarterOf(patch.date ?? cur.date) };
+        if (!(next.amount > 0)) throw new Error("O valor da despesa deve ser positivo.");
+        next.netAmount = patch.netAmount ?? Math.round((next.amount + (next.vat ?? 0) - (next.withholding ?? 0)) * 100) / 100;
+        const changed = Object.keys(patch).filter((k) => JSON.stringify((cur as unknown as Record<string, unknown>)[k]) !== JSON.stringify((patch as Record<string, unknown>)[k]));
+        next.history = [...(cur.history ?? []), { at: new Date().toISOString(), by: sess.name, text: `Corrigida: ${changed.join(", ") || "sem alterações"}${note ? ` — ${note}` : ""}` }];
+        set({ expenses: s.expenses.map((x) => (x.id === id ? next : x)), audit: [audit("Despesa corrigida", "expense", id, changed.map((k) => `${k}: ${JSON.stringify((cur as unknown as Record<string, unknown>)[k])} → ${JSON.stringify((patch as Record<string, unknown>)[k])}`).join("; ").slice(0, 900)), ...s.audit] });
+      },
+      approveExpense: (id) => {
+        assertCan("expenses.manage");
+        const sess = session()!;
+        const s = get();
+        const cur = s.expenses.find((x) => x.id === id);
+        if (!cur || cur.status !== "pendente") throw new Error("Só é possível aprovar despesas pendentes.");
+        set({
+          expenses: s.expenses.map((x) => (x.id === id ? { ...x, status: "aprovada", history: [...(x.history ?? []), { at: new Date().toISOString(), by: sess.name, text: "Despesa aprovada." }] } : x)),
+          audit: [audit("Despesa aprovada", "expense", id), ...s.audit],
+        });
+      },
+      payExpense: (id, p) => {
+        assertCan("expenses.manage");
+        const sess = session()!;
+        const s = get();
+        const cur = s.expenses.find((x) => x.id === id);
+        if (!cur) throw new Error("Despesa inexistente.");
+        if (cur.status === "anulada" || cur.status === "paga" || !cur.status) throw new Error("Esta despesa não está por pagar.");
+        const due = Math.round(((cur.netAmount ?? cur.amount) - (cur.paidAmount ?? 0)) * 100) / 100;
+        if (!(p.amount > 0) || p.amount > due + 0.005) throw new Error(`Valor inválido. Em falta: ${due.toLocaleString("pt-AO")} Kz.`);
+        const now = new Date().toISOString();
+        const paidAmount = Math.round(((cur.paidAmount ?? 0) + p.amount) * 100) / 100;
+        const status = paidAmount >= (cur.netAmount ?? cur.amount) - 0.005 ? "paga" : "parcialmente_paga";
+        set({
+          expenses: s.expenses.map((x) =>
+            x.id === id
+              ? {
+                  ...x,
+                  paidAmount,
+                  status,
+                  paymentDate: p.date,
+                  payments: [...(x.payments ?? []), { id: nid("xpp"), date: p.date, amount: p.amount, method: p.method, reference: p.reference, by: sess.name, at: now }],
+                  history: [...(x.history ?? []), { at: now, by: sess.name, text: `Pagamento de ${p.amount.toLocaleString("pt-AO")} Kz (${status === "paga" ? "liquidada" : "parcial"}).` }],
+                }
+              : x,
+          ),
+          audit: [audit("Pagamento de despesa", "expense", id, `${p.amount} Kz · ${p.date}`), ...s.audit],
+        });
+      },
+      voidExpense: (id, reason) => {
+        assertCan("expenses.manage");
+        if (!reason?.trim()) throw new Error("Indique o motivo da anulação.");
+        const sess = session()!;
+        const s = get();
+        const cur = s.expenses.find((x) => x.id === id);
+        if (!cur || cur.status === "anulada") throw new Error("Despesa inexistente ou já anulada.");
+        set({
+          expenses: s.expenses.map((x) => (x.id === id ? { ...x, status: "anulada", voidReason: reason.trim(), history: [...(x.history ?? []), { at: new Date().toISOString(), by: sess.name, text: `Anulada: ${reason.trim()}` }] } : x)),
+          audit: [audit("Despesa anulada", "expense", id, reason.trim()), ...s.audit],
+        });
       },
       deleteExpense: (id) => {
         assertCan("expenses.manage");
-        set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id), audit: [audit("Despesa eliminada", "expense", id), ...s.audit] }));
+        const cur = get().expenses.find((x) => x.id === id);
+        // registos financeiros com pagamentos ou já pagos são anulados, nunca apagados
+        if (!cur) throw new Error("Despesa inexistente.");
+        if (!cur.status || cur.status === "paga" || cur.status === "parcialmente_paga" || (cur.payments ?? []).length) throw new Error("Despesas pagas não podem ser eliminadas — utilize Anular.");
+        set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id), audit: [audit("Despesa eliminada", "expense", id, `${cur.description} · ${cur.amount} Kz`), ...s.audit] }));
+      },
+
+      saveSupplier: (sup) => {
+        assertCan("suppliers.manage");
+        const sess = session()!;
+        if (!sup.name?.trim()) throw new Error("Indique o nome do fornecedor.");
+        const s = get();
+        const nif = sup.nif?.trim() || undefined;
+        if (nif && s.suppliers.some((x) => x.id !== sup.id && x.nif === nif)) throw new Error(`Já existe um fornecedor com o NIF ${nif}.`);
+        const existing = s.suppliers.find((x) => x.id === sup.id);
+        const now = new Date().toISOString();
+        const next: Supplier = { ...sup, id: sup.id || nid("sup"), name: sup.name.trim(), nif, createdAt: existing?.createdAt ?? now, history: [...(existing?.history ?? []), { at: now, by: sess.name, text: existing ? "Fornecedor actualizado." : "Fornecedor registado." }] };
+        set({ suppliers: upsert(s.suppliers, next), audit: [audit(existing ? "Fornecedor actualizado" : "Fornecedor registado", "supplier", next.id, next.name), ...s.audit] });
+        return next;
+      },
+      archiveSupplier: (id, archived) => {
+        assertCan("suppliers.manage");
+        const sess = session()!;
+        set((s) => ({
+          suppliers: s.suppliers.map((x) => (x.id === id ? { ...x, active: !archived, history: [...(x.history ?? []), { at: new Date().toISOString(), by: sess.name, text: archived ? "Arquivado." : "Reactivado." }] } : x)),
+          audit: [audit(archived ? "Fornecedor arquivado" : "Fornecedor reactivado", "supplier", id), ...s.audit],
+        }));
       },
 
       saveHall: (h) => {

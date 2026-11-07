@@ -173,6 +173,12 @@ export interface Payment {
   registeredBy?: string;
   /** N.º do recibo emitido após confirmação. */
   receiptNumber?: string;
+  /** "portal" (submetido pelo morador) ou "presencial" (registado pela gestão). */
+  channel?: "portal" | "presencial";
+  /** Chave anti-duplicação gerada pelo formulário (reenvios e cliques repetidos). */
+  clientKey?: string;
+  /** Utilizador da gestão que registou/carregou o pagamento em nome do morador. */
+  submittedBy?: string;
 }
 
 export type CircularStatus = "rascunho" | "publicada" | "arquivada";
@@ -523,7 +529,24 @@ export interface OpsTask {
 
 export type ExpenseCategory = "Limpeza" | "Jardinagem" | "Manutenção" | "Elevadores" | "Segurança e portaria" | "Energia e água" | "Administração";
 
-/** Despesa do condomínio (contratos e serviços). Os custos de manutenção concluída vêm das actividades. */
+export type ExpenseStatus = "pendente" | "aprovada" | "paga" | "parcialmente_paga" | "anulada";
+
+export interface ExpensePayment {
+  id: string;
+  date: string;
+  amount: number;
+  method?: PaymentMethod;
+  reference?: string;
+  by: string;
+  at: string;
+}
+
+/**
+ * Despesa do condomínio (facturas de fornecedores, contratos, serviços).
+ * `amount` = valor da despesa (base, sem IVA); `vat` = IVA; `withholding` = retenção na fonte;
+ * `netAmount` = líquido a pagar ao fornecedor (amount + vat − withholding).
+ * Registos antigos sem `status` são despesas já pagas.
+ */
 export interface Expense {
   id: string;
   date: string;
@@ -531,6 +554,44 @@ export interface Expense {
   category: ExpenseCategory;
   description: string;
   amount: number;
+  supplierId?: string;
+  supplierName?: string;
+  nif?: string;
+  invoiceRef?: string;
+  invoiceDate?: string;
+  dueDate?: string;
+  paymentDate?: string;
+  vat?: number;
+  withholding?: number;
+  netAmount?: number;
+  /** Rubrica orçamental (ex.: "bl_2026_desp_manutencao_de_elevadores_servicos"). */
+  budgetLineId?: string;
+  costCenter?: string;
+  status?: ExpenseStatus;
+  paidAmount?: number;
+  payments?: ExpensePayment[];
+  attachments?: PaymentProof[];
+  notes?: string;
+  /** Origem (ex.: importação Excel: ficheiro, linha e valores originais). */
+  source?: { file: string; row: number; raw: Record<string, unknown> };
+  history?: { at: string; by: string; text: string }[];
+  createdBy?: string;
+  voidReason?: string;
+}
+
+/** Fornecedor ou beneficiário de despesas. */
+export interface Supplier {
+  id: string;
+  name: string;
+  nif?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  category?: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+  history?: { at: string; by: string; text: string }[];
 }
 
 export interface AccessLog {

@@ -16,7 +16,8 @@
     "db:backup": "bash scripts/db-backup.sh",
     "users:activation-link": "tsx --tsconfig tsconfig.json scripts/activation-link.ts",
     "test:unit": "tsx --tsconfig tsconfig.json tests/unit.test.ts",
-    "test:api": "tsx --tsconfig tsconfig.json tests/api.test.ts"
+    "test:api": "tsx --tsconfig tsconfig.json tests/api.test.ts",
+    "test:gestao": "tsx --tsconfig tsconfig.json tests/gestao.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -27,12 +28,14 @@
     "@prisma/client": "^7.10.1",
     "clsx": "^2.1.1",
     "dotenv": "^18.0.9",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.43.0",
     "jspdf": "^3.0.4",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
     "nodemailer": "^10.2.1",
     "prisma": "^7.10.1",
+    "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.90.0",
@@ -46,6 +49,7 @@
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

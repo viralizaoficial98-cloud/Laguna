@@ -6,7 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Session } from "@/types";
-import { prisma } from "./db";
+import { prisma, type Tx } from "./db";
 import { ActionError } from "./errors";
 
 export const MAX_FILE_BYTES = Number(process.env.MAX_UPLOAD_MB ?? 5) * 1024 * 1024;
@@ -30,20 +30,44 @@ function sniff(buf: Buffer): string | null {
   return null;
 }
 
-export async function saveFile(buf: Buffer, originalName: string, owner: Session | null, residentId?: string | null) {
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+export async function saveFile(
+  buf: Buffer,
+  originalName: string,
+  owner: Session | null,
+  residentId?: string | null,
+  opts: { allowXlsx?: boolean; maxBytes?: number; tx?: Tx; category?: string; apartmentId?: string | null } = {},
+) {
   if (buf.length === 0) throw new ActionError("Ficheiro vazio.", 400);
-  if (buf.length > MAX_FILE_BYTES) throw new ActionError(`O ficheiro excede ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB.`, 413);
-  const mime = sniff(buf);
-  if (!mime || !ALLOWED_MIME[mime]) throw new ActionError("Formato não suportado. Utilize PDF, JPG, PNG ou WEBP.", 415);
+  const max = opts.maxBytes ?? MAX_FILE_BYTES;
+  if (buf.length > max) throw new ActionError(`O ficheiro excede ${Math.round(max / 1024 / 1024)} MB.`, 413);
+  let mime = sniff(buf);
+  // folhas de cálculo só para a importação Excel (contentor ZIP com extensão .xlsx)
+  if (!mime && opts.allowXlsx && buf.subarray(0, 4).toString("latin1") === "PK\u0003\u0004" && /\.xlsx$/i.test(originalName)) mime = XLSX;
+  if (!mime || !(ALLOWED_MIME[mime] || mime === XLSX)) throw new ActionError(opts.allowXlsx ? "Formato não suportado. Utilize ficheiros .xlsx." : "Formato não suportado. Utilize PDF, JPG, PNG ou WEBP.", 415);
   const id = `fil_${randomBytes(12).toString("base64url")}`;
   const sub = new Date().toISOString().slice(0, 7);
-  const rel = path.join(sub, `${id}.${ALLOWED_MIME[mime]}`);
+  const rel = path.join(sub, `${id}.${ALLOWED_MIME[mime] ?? "xlsx"}`);
   const abs = path.join(storageDir(), rel);
   await mkdir(path.dirname(abs), { recursive: true });
   await writeFile(abs, buf, { mode: 0o640 });
   const name = path.basename(originalName || "ficheiro").replace(/[^\p{L}\p{N}._ -]+/gu, "_").slice(0, 200) || "ficheiro";
-  await prisma.storedFile.create({
-    data: { id, originalName: name, mime, size: buf.length, sha256: createHash("sha256").update(buf).digest("hex"), storagePath: rel, ownerUserId: owner?.userId ?? null, ownerRole: owner?.role ?? null, residentId: residentId ?? owner?.residentId ?? null },
+  // dentro de uma transacção, o registo é criado na mesma transacção (visível e anulado em conjunto)
+  await (opts.tx ?? prisma).storedFile.create({
+    data: {
+      id,
+      originalName: name,
+      mime,
+      size: buf.length,
+      sha256: createHash("sha256").update(buf).digest("hex"),
+      storagePath: rel,
+      ownerUserId: owner?.userId ?? null,
+      ownerRole: owner?.role ?? null,
+      residentId: residentId ?? owner?.residentId ?? null,
+      category: opts.category ?? null,
+      apartmentId: opts.apartmentId ?? null,
+    },
   });
   return { id, name, mime, size: buf.length };
 }
@@ -67,6 +91,8 @@ export async function readAuthorized(id: string, sess: Session) {
     published = notice + doc > 0;
   }
   const ownResident = sess.role === "morador" && !!sess.residentId && f.residentId === sess.residentId;
+  // a imagem de assinatura só é legível pelo próprio titular (nem a restante gestão a pode descarregar)
+  if (f.category === "signature" && f.ownerUserId !== sess.userId) throw new ActionError("Sem permissão para este ficheiro.", 403);
   if (!staff && !own && !published && !ownResident) throw new ActionError("Sem permissão para este ficheiro.", 403);
   const abs = path.join(/* turbopackIgnore: true */ storageDir(), f.storagePath);
   if (!abs.startsWith(storageDir())) throw new ActionError("Caminho inválido.", 400);

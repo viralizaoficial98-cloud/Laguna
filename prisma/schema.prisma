@@ -210,9 +210,14 @@ model StoredFile {
   ownerUserId  String?  @db.VarChar(64)
   ownerRole    Role?
   residentId   String?  @db.VarChar(64)
+  /// fracção a que o anexo pertence (comprovativos carregados pela gestão em nome do morador)
+  apartmentId  String?  @db.VarChar(64)
+  /// proof | signature | declaration | document | photo | other — "signature" só é legível pelo próprio titular
+  category     String?  @db.VarChar(30)
   createdAt    DateTime @default(now()) @db.DateTime(3)
 
   @@index([ownerUserId])
+  @@index([apartmentId])
   @@map("stored_files")
 }
 
@@ -239,6 +244,7 @@ model Apartment {
   occupancies  Occupancy[]
   charges      Charge[]
   visits       Visit[]
+  holders      FractionHolder[]
 
   @@unique([block, number])
   @@map("apartments")
@@ -323,6 +329,11 @@ model Payment {
   validatedAmount Decimal?      @db.Decimal(14, 2)
   registeredBy    String?       @db.VarChar(160)
   receiptNumber   String?       @unique @db.VarChar(40)
+  /// portal | presencial
+  channel         String?       @db.VarChar(12)
+  /// chave anti-duplicação do formulário (reenvio / clique repetido)
+  clientKey       String?       @unique @db.VarChar(64)
+  submittedBy     String?       @db.VarChar(160)
 
   quota     Quota     @relation(fields: [quotaId], references: [id], onDelete: Restrict)
   apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
@@ -360,15 +371,59 @@ model Charge {
 }
 
 model Expense {
-  id          String   @id @db.VarChar(80)
-  date        DateTime @db.Date
-  period      String   @db.VarChar(8)
-  category    String   @db.VarChar(40)
-  description String   @db.VarChar(255)
-  amount      Decimal  @db.Decimal(14, 2)
+  id           String    @id @db.VarChar(80)
+  date         DateTime  @db.Date
+  period       String    @db.VarChar(8)
+  category     String    @db.VarChar(40)
+  description  String    @db.VarChar(255)
+  /// valor da despesa (base, sem IVA)
+  amount       Decimal   @db.Decimal(14, 2)
+  supplierId   String?   @db.VarChar(80)
+  supplierName String?   @db.VarChar(255)
+  nif          String?   @db.VarChar(40)
+  invoiceRef   String?   @db.VarChar(80)
+  invoiceDate  DateTime? @db.Date
+  dueDate      DateTime? @db.Date
+  paymentDate  DateTime? @db.Date
+  vat          Decimal?  @db.Decimal(14, 2)
+  withholding  Decimal?  @db.Decimal(14, 2)
+  /// líquido a pagar = valor + IVA − retenção
+  netAmount    Decimal?  @db.Decimal(14, 2)
+  budgetLineId String?   @db.VarChar(120)
+  costCenter   String?   @db.VarChar(80)
+  /// pendente | aprovada | paga | parcialmente_paga | anulada (nulo = registo antigo, pago)
+  status       String?   @db.VarChar(24)
+  paidAmount   Decimal?  @db.Decimal(14, 2)
+  payments     String?   @db.LongText
+  attachments  String?   @db.LongText
+  notes        String?   @db.Text
+  source       String?   @db.LongText
+  history      String?   @db.LongText
+  createdBy    String?   @db.VarChar(160)
+  voidReason   String?   @db.Text
 
   @@index([period])
+  @@index([supplierId])
+  @@index([invoiceRef])
+  @@index([budgetLineId])
   @@map("expenses")
+}
+
+model Supplier {
+  id        String   @id @db.VarChar(80)
+  name      String   @db.VarChar(255)
+  nif       String?  @db.VarChar(40)
+  email     String?  @db.VarChar(190)
+  phone     String?  @db.VarChar(40)
+  address   String?  @db.Text
+  category  String?  @db.VarChar(80)
+  notes     String?  @db.Text
+  active    Boolean
+  createdAt DateTime @db.DateTime(3)
+  history   String?  @db.LongText
+
+  @@index([nif])
+  @@map("suppliers")
 }
 
 // ————————————————————————— Reservas de salões —————————————————————————
@@ -692,4 +747,228 @@ model ImportRun {
   summary   String   @db.LongText
 
   @@map("import_runs")
+}
+
+// ————————————————————————— Proprietários e inquilinos —————————————————————————
+
+/// Pessoa ou entidade (proprietário, inquilino ou ambos). Pode não ter conta no portal.
+model Party {
+  id             String   @id @db.VarChar(64)
+  name           String   @db.VarChar(255)
+  /// nome normalizado (sem acentos, pontuação e maiúsculas) — conciliação e prevenção de duplicados
+  normalizedName String   @db.VarChar(255)
+  kind           String?  @db.VarChar(20)
+  nif            String?  @db.VarChar(40)
+  email          String?  @db.VarChar(190)
+  phone          String?  @db.VarChar(40)
+  phone2         String?  @db.VarChar(40)
+  address        String?  @db.Text
+  notes          String?  @db.Text
+  residentId     String?  @db.VarChar(64)
+  source         String?  @db.LongText
+  archived       Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @db.DateTime(3)
+  createdBy      String?  @db.VarChar(160)
+
+  holdings FractionHolder[]
+
+  @@index([normalizedName])
+  @@index([nif])
+  @@map("parties")
+}
+
+/// Titularidade (proprietário) e arrendamento (inquilino) de uma fracção, com histórico.
+model FractionHolder {
+  id          String    @id @db.VarChar(64)
+  apartmentId String    @db.VarChar(64)
+  partyId     String    @db.VarChar(64)
+  /// proprietario | inquilino
+  role        String    @db.VarChar(12)
+  from        DateTime? @db.Date
+  to          DateTime? @db.Date
+  active      Boolean
+  source      String?   @db.VarChar(60)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
+  createdBy   String?   @db.VarChar(160)
+  endedBy     String?   @db.VarChar(160)
+  endReason   String?   @db.Text
+
+  apartment Apartment @relation(fields: [apartmentId], references: [id], onDelete: Restrict)
+  party     Party     @relation(fields: [partyId], references: [id], onDelete: Restrict)
+
+  @@index([apartmentId, role])
+  @@index([partyId])
+  @@map("fraction_holders")
+}
+
+/// Um proprietário activo e um inquilino activo por fracção (restrição na base de dados).
+model ActiveHolderSlot {
+  apartmentId String @db.VarChar(64)
+  role        String @db.VarChar(12)
+  holderId    String @unique @db.VarChar(64)
+
+  @@id([apartmentId, role])
+  @@map("active_holder_slots")
+}
+
+// ————————————————————————— Declarações e assinatura —————————————————————————
+
+model DeclarationType {
+  code              String  @id @db.VarChar(40)
+  name              String  @db.VarChar(160)
+  description       String? @db.Text
+  /// texto com marcadores {{nome}}, {{fraccao}}, {{bloco}}, {{tipologia}}, {{finalidade}}, …
+  template          String  @db.LongText
+  /// nenhum | residencia | titularidade | sem_divida | situacao_financeira
+  requirement       String  @db.VarChar(30)
+  active            Boolean @default(true)
+  residentCanRequest Boolean @default(true)
+  position          Int     @default(0)
+
+  @@map("declaration_types")
+}
+
+model Declaration {
+  id                String    @id @db.VarChar(64)
+  /// número único: DEC-AAAA-NNNN
+  number            String    @unique @db.VarChar(20)
+  typeCode          String    @db.VarChar(40)
+  apartmentId       String    @db.VarChar(64)
+  residentId        String?   @db.VarChar(64)
+  partyId           String?   @db.VarChar(64)
+  subjectName       String    @db.VarChar(255)
+  purpose           String?   @db.Text
+  /// solicitada | em_analise | aguardando_assinatura | emitida | rejeitada | cancelada | anulada
+  status            String    @db.VarChar(24)
+  /// portal | presencial
+  channel           String    @db.VarChar(12)
+  requestedByUserId String?   @db.VarChar(64)
+  requestedByName   String    @db.VarChar(160)
+  requestedAt       DateTime  @db.DateTime(3)
+  content           String?   @db.LongText
+  checks            String?   @db.LongText
+  reviewedBy        String?   @db.VarChar(160)
+  rejectionReason   String?   @db.Text
+  signedByUserId    String?   @db.VarChar(64)
+  signerName        String?   @db.VarChar(160)
+  signerTitle       String?   @db.VarChar(160)
+  signedAt          DateTime? @db.DateTime(3)
+  signatureId       String?   @db.VarChar(64)
+  /// imagem | (futuro) prestador de assinatura electrónica qualificada
+  signatureProvider String?   @db.VarChar(40)
+  pdfFileId         String?   @db.VarChar(64)
+  pdfSha256         String?   @db.Char(64)
+  verificationCode  String?   @unique @db.VarChar(32)
+  revokedAt         DateTime? @db.DateTime(3)
+  revokedBy         String?   @db.VarChar(160)
+  revokeReason      String?   @db.Text
+  history           String    @db.LongText
+  updatedAt         DateTime  @updatedAt @db.DateTime(3)
+
+  @@index([apartmentId])
+  @@index([residentId])
+  @@index([status])
+  @@map("declarations")
+}
+
+/// Imagem de assinatura do utilizador (privada). Uma activa por utilizador.
+model Signature {
+  id          String    @id @db.VarChar(64)
+  userId      String    @db.VarChar(64)
+  fileId      String    @db.VarChar(64)
+  displayName String    @db.VarChar(160)
+  title       String    @db.VarChar(160)
+  active      Boolean
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
+  revokedAt   DateTime? @db.DateTime(3)
+
+  @@index([userId])
+  @@map("signatures")
+}
+
+// ————————————————————————— Orçamento e receitas —————————————————————————
+
+model Budget {
+  id            String   @id @db.VarChar(64)
+  year          Int      @unique
+  name          String   @db.VarChar(160)
+  /// rascunho | aprovado
+  status        String   @db.VarChar(20)
+  source        String?  @db.VarChar(255)
+  notes         String?  @db.Text
+  /// informação de origem (ex.: disponibilidades em caixa por trimestre, colunas auxiliares)
+  sourceInfo    String?  @db.LongText
+  createdAt     DateTime @default(now()) @db.DateTime(3)
+  createdBy     String?  @db.VarChar(160)
+
+  lines BudgetLine[]
+
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id               String  @id @db.VarChar(120)
+  budgetId         String  @db.VarChar(64)
+  parentId         String? @db.VarChar(120)
+  /// receita | despesa | fundo
+  kind             String  @db.VarChar(12)
+  name             String  @db.VarChar(255)
+  position         Int
+  /// orçamento anual aprovado (folhas). Nos grupos é calculado a partir das folhas.
+  annualAmount     Decimal @db.Decimal(16, 2)
+  /// 12 valores mensais (JSON); nulo = anual ÷ 12
+  monthly          String? @db.Text
+  isGroup          Boolean
+  /// parte das quotas atribuída a esta rubrica (ex.: 0,90 despesas correntes / 0,10 fundo de reserva)
+  quotaShare       Decimal? @db.Decimal(6, 4)
+  note             String? @db.Text
+  sourceRaw        String? @db.LongText
+
+  budget     Budget            @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  executions BudgetExecution[]
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+/// Execução histórica por trimestre (ficheiro de origem ou lançamento manual) — separada dos movimentos do sistema.
+model BudgetExecution {
+  id        String   @id @db.VarChar(64)
+  lineId    String   @db.VarChar(120)
+  period    String   @db.VarChar(8)
+  amount    Decimal  @db.Decimal(16, 2)
+  /// ficheiro | manual
+  source    String   @db.VarChar(20)
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  createdBy String?  @db.VarChar(160)
+
+  line BudgetLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+
+  @@unique([lineId, period, source])
+  @@map("budget_executions")
+}
+
+/// Receitas não provenientes de quotas (antenas, água, recuperações, outras).
+model Revenue {
+  id           String   @id @db.VarChar(64)
+  date         DateTime @db.Date
+  period       String   @db.VarChar(8)
+  budgetLineId String?  @db.VarChar(120)
+  category     String   @db.VarChar(80)
+  description  String   @db.VarChar(255)
+  amount       Decimal  @db.Decimal(14, 2)
+  apartmentId  String?  @db.VarChar(64)
+  reference    String?  @db.VarChar(120)
+  /// registada | anulada
+  status       String   @db.VarChar(16)
+  attachments  String?  @db.LongText
+  createdBy    String   @db.VarChar(160)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+  voidReason   String?  @db.Text
+
+  @@index([period])
+  @@map("revenues")
 }
