@@ -56,6 +56,10 @@ Todas as operações (aceites e recusadas) ficam em `action_log`; as de negócio
 | Portaria | `visits`, `visit_checks`, `access_logs` |
 | Operações | `occurrences`, `elevators`, `ops_tasks` |
 | Auditoria / migração | `audit_entries`, `action_log`, `import_runs` |
+| Titulares (proprietários/inquilinos) | `parties`, `fraction_holders`, `active_holder_slots` |
+| Fornecedores e despesas | `suppliers` (+ colunas novas em `expenses`: fornecedor, NIF, factura, IVA, retenção, líquido, rubrica, estado, pagamentos, origem) |
+| Declarações e assinatura | `declaration_types`, `declarations`, `signatures` |
+| Orçamento | `budgets`, `budget_lines`, `budget_executions`, `revenues` |
 
 Montantes: `DECIMAL(14,2)`. Datas: `DATE`; instantes: `DATETIME(3)` em UTC. Históricos, convidados, listas de verificação
 e metadados de anexos: JSON em `LONGTEXT` (compatível com MySQL e MariaDB). Esquema: `prisma/schema.prisma`;
@@ -78,6 +82,39 @@ migrações versionadas em `prisma/migrations/` (aplicadas com `prisma migrate d
   bloquear contas de administração ou do Gestor Financeiro, nem elevar o próprio perfil. José tem acesso total.
   O histórico (`user_audit_log`) regista quem, conta, operação, data, estado anterior e novo — sem palavras-passe nem tokens.
 
+## Gestão administrativa e financeira (Nelson Rodrigues — centro de gestão)
+
+Migração `20261107000000_gestao_completa` (apenas adiciona tabelas, colunas e índices — não altera nem apaga dados).
+
+- **Permissões** (`src/config/permissions.ts`, verificadas no servidor): o Gestor Operacional gere fracções, proprietários,
+  inquilinos, moradores, quotas, pagamentos (incluindo presenciais e validação), recibos, receitas, despesas, fornecedores,
+  orçamento, reservas, desocupações, declarações, assinatura, importação Excel e consulta a auditoria. Continua sem poder
+  criar/alterar contas de administração ou do Gestor Financeiro, alterar/eliminar a auditoria ou contornar a autenticação.
+- **Proprietários e inquilinos** (`src/server/mgmt/holders.ts`): pessoas/entidades em `parties`; associação à fracção em
+  `fraction_holders` com histórico (início, fim, motivo, autor). `active_holder_slots` garante na base de dados um único
+  proprietário e um único inquilino activos por fracção. Fracção sem inquilino → sem registo (nada fictício).
+- **Pagamento presencial** (`registerPayment`): canal `presencial`, comprovativo opcional (PDF/JPG/PNG) associado à
+  fracção/quota/morador, pagamento parcial sem exceder o valor em dívida, chave única `payments.clientKey` contra duplo
+  clique/reenvio, recibo após validação.
+- **Despesas**: estados Pendente/Aprovada/Paga/Parcialmente paga/Anulada; pagamentos parciais; anulação com motivo
+  (nunca apaga registos com pagamentos); detecção de factura duplicada por fornecedor/NIF; histórico de alterações.
+- **Declarações** (`src/server/mgmt/declarations.ts`): Solicitada → Em análise → A aguardar assinatura → Emitida
+  (ou Rejeitada/Cancelada; revogação posterior com motivo). Requisitos verificados no servidor (residência activa,
+  titularidade com confirmação documental, ausência de dívida). PDF gerado no servidor com número único, código QR e
+  código de verificação (`/verificar?codigo=` mostra apenas iniciais do titular), SHA-256 guardado.
+- **Assinatura** (`src/server/mgmt/signature.ts`): imagem PNG guardada em `STORAGE_DIR` (categoria `signature`) e
+  servida apenas ao próprio titular; aplicada só após confirmação expressa em cada documento; registo de quem, quando e
+  que documento. Não é uma assinatura digital qualificada — a interface `SignatureProvider` permite integrar um
+  fornecedor certificado no futuro.
+- **Orçamento** (`src/server/mgmt/budget.ts`): orçamento anual por rubricas (receita/despesa/fundo), valores mensais,
+  execução do ficheiro por trimestre (`budget_executions`) e execução do sistema (quotas, receitas, despesas). Para cada
+  trimestre prevalece a execução do ficheiro quando existe; os movimentos do sistema contam apenas nos trimestres sem
+  dados do ficheiro (sobreposições assinaladas). Totais calculados só a partir das rubricas finais (sem dupla contagem).
+- **Importação Excel** (`src/server/mgmt/excel-import.ts`, `/painel/importacao`): leitura, normalização (os valores
+  originais ficam em `source`/`sourceRaw`), conciliação, duplicados, pré-visualização, decisões explícitas para
+  conflitos, cópia de segurança JSON comprimida (`BACKUP_DIR`) antes de gravar, relatório em `import_runs`.
+  Idempotente; nunca elimina nem substitui registos sem decisão.
+
 ## Migração dos dados
 
 - `npm run db:import` — pré-visualização dos dados actuais do frontend (`src/data/*`): novos, iguais, conflitos, rejeitados.
@@ -97,3 +134,4 @@ pagamentos, etc.). Devem ser validados e substituídos pelos dados reais à medi
 |---|---|
 | `npm run test:unit` | regras de negócio, mapeamento domínio ↔ base de dados, projecção por perfil (sem base de dados) |
 | `BASE_URL=… npm run test:api` | API contra um servidor e uma base de dados **de teste** (login, perfis, utilizadores, concorrência, ficheiros, reservas, desocupação, auditoria) |
+| `BASE_URL=… XLSX_DIR=… npm run test:gestao` | gestão do Nelson: permissões, proprietários/inquilinos, pagamento presencial, despesas/fornecedores, assinatura, declarações (pedido → assinatura → verificação), importação Excel (pré-visualização, cópia de segurança, idempotência, preservação dos dados), receitas. `XLSX_DIR` (opcional) aponta para os três ficheiros Excel, que não estão no repositório |

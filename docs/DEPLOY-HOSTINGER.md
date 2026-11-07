@@ -46,6 +46,10 @@ npm run db:migrate                        # prisma migrate deploy — apenas apl
 
 Nunca usar `prisma migrate reset`, `prisma migrate dev` ou `prisma db push --force-reset` em produção.
 
+Esta versão acrescenta a migração `20261107000000_gestao_completa` (fracções/titulares, fornecedores, declarações,
+assinaturas, orçamento, receitas e colunas novas em `expenses`, `payments` e `stored_files`). É **aditiva**: não altera
+nem apaga dados existentes. Fazer a cópia de segurança do ponto 2 antes de a aplicar. Testada em MySQL 8 e MariaDB 10.11.
+
 ## 5. Importação inicial dos dados
 
 ```bash
@@ -53,6 +57,25 @@ npm run db:import                         # PRÉ-VISUALIZAÇÃO — não grava n
 npm run db:import -- --apply              # insere os registos novos (pode repetir: não duplica)
 npm run db:verify                         # contagens, 100 apartamentos, 80 T2 + 20 Duplex, integridade financeira
 ```
+
+### 5.1 Importação dos ficheiros Excel do condomínio (apenas após autorização)
+
+Fracções/proprietários/inquilinos, mapa de gastos e execução orçamental são importados **pela interface**, não por comando:
+
+1. Fazer `npm run db:backup` (a importação cria também uma cópia JSON automática em `BACKUP_DIR`).
+2. Nelson (ou José) abre **Administração → Importação Excel**, selecciona os três ficheiros e carrega em
+   *Ler e pré-visualizar* — nada é gravado nesta fase.
+3. Rever os separadores Fracções, Despesas e Orçamento: possíveis duplicados de nomes, conflitos com o cadastro actual
+   (nomes de proprietário diferentes, ocupantes diferentes), despesas de demonstração do mesmo mês, divergências do orçamento.
+   Por omissão **nenhum** dado existente é substituído; só as linhas assinaladas o são.
+4. Confirmar e importar. Repetir a importação não duplica registos. O relatório fica em *Importações anteriores*.
+
+Os ficheiros Excel contêm dados pessoais: não os colocar no repositório.
+
+### 5.2 Assinatura do Gestor Operacional
+
+Nelson abre **Administração → Assinatura electrónica**, carrega a imagem PNG (fundo transparente) e indica nome e cargo.
+A imagem fica em `STORAGE_DIR` e só é servida ao próprio Nelson; é aplicada a cada declaração apenas quando ele confirma.
 
 ## 6. Contas iniciais e activação
 
@@ -80,13 +103,16 @@ garantindo que o processo lê o ficheiro `.env` da pasta da aplicação. Este gu
 2. Iniciar sessão com cada um dos cinco perfis (após activação) e confirmar menus e dashboards.
 3. Abrir o portal em dois computadores: um comprovativo enviado pelo morador aparece ao Nelson e à Saraiva.
 4. Reiniciar o processo e confirmar que os dados se mantêm.
-5. Se algum computador tiver dados das versões anteriores (guardados no navegador), José abre
+5. Nelson: abrir Fracções, Pagamento presencial, Despesas, Orçamento e Declarações; um morador solicita uma declaração,
+   Nelson assina-a e o morador descarrega o PDF; o código QR abre `/verificar`.
+6. Se algum computador tiver dados das versões anteriores (guardados no navegador), José abre
    **Importação de dados** nesse navegador, pré-visualiza, revê os conflitos e confirma.
 
 ## Cópias de segurança regulares
 
 - Base de dados: `npm run db:backup` (agendar diariamente; guardar fora do servidor).
-- Anexos: copiar a pasta `STORAGE_DIR` (ex.: `tar czf laguna-storage-$(date +%F).tgz /home/UTILIZADOR/laguna-storage`).
+- Cópias JSON automáticas das importações Excel: pasta `BACKUP_DIR` (guardar também fora do servidor).
+- Anexos (comprovativos, declarações e assinatura): copiar a pasta `STORAGE_DIR` (ex.: `tar czf laguna-storage-$(date +%F).tgz /home/UTILIZADOR/laguna-storage`).
 
 ## Rollback
 

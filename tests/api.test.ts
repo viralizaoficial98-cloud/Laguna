@@ -7,73 +7,9 @@
  * As palavras-passe de teste são geradas aleatoriamente em cada execução (não ficam no código).
  */
 import "dotenv/config";
-import { randomBytes } from "node:crypto";
 import { prisma } from "@/server/db";
-import { issueToken } from "@/server/auth";
 import { initialUsers } from "@/data/users";
-
-const BASE = process.env.BASE_URL ?? "http://localhost:3100";
-let pass = 0;
-let fail = 0;
-const ok = (name: string, cond: unknown, extra = "") => {
-  if (cond) pass++;
-  else fail++;
-  console.log(`${cond ? "✔" : "✘"} ${name}${!cond && extra ? ` — ${extra}` : ""}`);
-};
-const pw = () => `Teste-${randomBytes(6).toString("hex")}-9`;
-
-class Client {
-  cookie = "";
-  constructor(public label: string) {}
-  async req(path: string, init: RequestInit & { json?: unknown } = {}) {
-    const headers: Record<string, string> = { ...(init.headers as Record<string, string>), ...(this.cookie ? { cookie: this.cookie } : {}) };
-    let body = init.body;
-    if (init.json !== undefined) {
-      headers["content-type"] = "application/json";
-      body = JSON.stringify(init.json);
-    }
-    const res = await fetch(BASE + path, { ...init, headers, body, redirect: "manual" });
-    const set = res.headers.get("set-cookie");
-    if (set) {
-      const m = /laguna_session=([^;]*)/.exec(set);
-      if (m) this.cookie = m[1] ? `laguna_session=${m[1]}` : "";
-    }
-    const text = await res.text();
-    let data: Record<string, unknown> = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      /* binário */
-    }
-    return { status: res.status, data, text, headers: res.headers };
-  }
-  login(email: string, password: string) {
-    return this.req("/api/auth/login", { method: "POST", json: { email, password } });
-  }
-  action(name: string, ...args: unknown[]) {
-    return this.req("/api/actions", { method: "POST", json: { name, args } });
-  }
-  async state() {
-    return (await this.req("/api/state")).data.state as Record<string, never[]> & Record<string, unknown>;
-  }
-}
-
-async function activate(email: string, password: string) {
-  const u = await prisma.user.findUniqueOrThrow({ where: { email } });
-  if (u.status === "bloqueado" || u.status === "inactivo") await prisma.user.update({ where: { id: u.id }, data: { status: u.passwordHash ? "activo" : "pendente_activacao", lockedUntil: null, failedLogins: 0 } });
-  const t = await issueToken(u.id, u.passwordHash ? "reset" : "activation", "testes");
-  const r = await new Client("anon").req("/api/auth/reset", { method: "POST", json: { token: t.token, password } });
-  return r.status === 200;
-}
-
-// PNG 1×1 válido
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
-
-async function upload(c: Client, buf: Buffer, name: string, type: string) {
-  const form = new FormData();
-  form.append("file", new File([new Uint8Array(buf)], name, { type }));
-  return c.req("/api/files", { method: "POST", body: form });
-}
+import { BASE, Client, PNG, activate, counts, ok, pw, upload } from "./helpers";
 
 async function main() {
   console.log(`Servidor: ${BASE}\n`);
@@ -217,7 +153,7 @@ async function main() {
   ok("reserva criada como Pendente de Pagamento (50.000 Kz)", myRes?.status === "pendente_pagamento");
   const up2 = await upload(winner, PNG, "reserva.png", "image/png");
   ok("comprovativo da reserva anexado", (await winner.action("submitReservationPayment", myRes.id, { reference: "", proof: { name: "reserva.png", type: "image/png", size: PNG.length, fileId: up2.data.id } })).status === 200);
-  ok("Nelson não valida pagamentos de reservas", (await ges.action("reviewReservationPayment", myRes.id, "aprovado")).status === 403);
+  ok("Portaria não valida pagamentos de reservas", (await por.action("reviewReservationPayment", myRes.id, "aprovado")).status === 403);
   ok("Saraiva valida → reserva confirmada (argumento opcional nulo aceite)", (await fin.action("reviewReservationPayment", myRes.id, "aprovado", null)).status === 200);
   const porRes = ((await por.state()).reservations as { id: string; guests: unknown[] }[]).find((r) => r.id === myRes.id);
   ok("Portaria consulta a reserva confirmada (lista de convidados)", !!porRes && Array.isArray(porRes.guests));
@@ -254,9 +190,9 @@ async function main() {
   const audits = await prisma.auditEntry.count();
   ok("auditoria de negócio persistida", audits > 0);
 
-  console.log(`\n${pass} passaram · ${fail} falharam`);
+  console.log(`\n${counts.pass} passaram · ${counts.fail} falharam`);
   await prisma.$disconnect();
-  process.exit(fail ? 1 : 0);
+  process.exit(counts.fail ? 1 : 0);
 }
 
 main().catch(async (e) => {

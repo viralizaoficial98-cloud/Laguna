@@ -44,13 +44,18 @@ palavra-passe está em `/recuperar`; a alteração, em *Meu perfil*. Novas conta
 
 - **José Leiria** — dashboard executivo (16 KPIs com selecção de período), dashboard financeiro (filtros ano/trimestre/bloco,
   5 gráficos), supervisão operacional (elevadores, ocorrências, serviços, equipas) e relatórios PDF financeiro e operacional.
-- **Nelson Rodrigues** — dashboard operacional (12 KPIs), Elevadores, Ocorrências, Limpeza, Jardinagem, Manutenção
-  (plano, calendário, execução, fiscalização) e relatórios PDF diário/semanal/mensal/manutenção/ocorrências/fiscalização.
+- **Nelson Rodrigues** — centro de gestão do condomínio: dashboard com indicadores financeiros, documentais e operacionais;
+  Fracções (ficha completa: proprietário, inquilino, ocupante, histórico, conta corrente, quotas, comprovativos, recibos,
+  documentos), Proprietários, Inquilinos, Moradores; Quotas, Pagamentos, **Registar pagamento presencial** (comprovativo
+  opcional, parcial, recibo), Comprovativos, Contas correntes, Receitas, Despesas, Fornecedores, **Orçamento e execução**,
+  relatórios; Declarações (solicitações, emissão presencial, pendentes, assinadas) e Assinatura electrónica; Elevadores,
+  Ocorrências, Limpeza, Jardinagem, Manutenção, Reservas, Portaria; Importação Excel, Utilizadores, Configurações, Auditoria.
 - **Saraiva** — dashboard financeiro (16 KPIs, 8 gráficos, filtros ano/trimestre/bloco/tipologia), validação/rejeição de comprovativos,
   registo de pagamentos com recibo PDF, conta corrente e extracto PDF, dívidas por apartamento, despesas, validação de pagamentos de
   reservas, verificação financeira da desocupação e relatórios financeiros PDF.
 - **Manuel Muenho** — quotas trimestrais por tipologia (pagamento total ou parcial, comprovativo, recibo), reservas de salões,
-  Solicitação de Desocupação do Imóvel, visitas, ocorrências próprias, estado dos elevadores.
+  Solicitação de Desocupação do Imóvel, **Solicitar Declaração** (residência, morada, titularidade, situação financeira,
+  quotas regularizadas — PDF assinado com QR de verificação), visitas, ocorrências próprias, estado dos elevadores.
 - **Portaria** — visitantes autorizados, confirmação de entradas/saídas, consulta de eventos em salões e de saídas autorizadas.
 
 Os dashboards de José e Nelson usam a **mesma fonte de dados** (`src/hooks/use-operations.ts`, `src/hooks/use-finance.ts`):
@@ -129,6 +134,8 @@ public/images/
 - `prisma/schema.prisma` + `prisma/migrations/` — esquema MySQL/MariaDB e migrações versionadas.
 - `src/domain/engine.ts` — regras de negócio e permissões (executadas no servidor com a sessão autenticada).
 - `src/server/*` — base de dados, autenticação, operações transaccionais, projecção por perfil, ficheiros, utilizadores, importação.
+- `src/server/mgmt/*` — titulares das fracções, declarações e PDF, assinatura, orçamento/receitas, auditoria, importação Excel.
 - `src/app/api/*` — route handlers (`auth`, `state`, `actions`, `files`, `users`, `import`, `health`).
 - `scripts/*` — importação, contas iniciais, ligações de activação, verificação e cópia de segurança.
-- `tests/*` — testes unitários e de integração da API.
+- `tests/*` — testes unitários e de integração da API (`test:unit`, `test:api`, `test:gestao`).
+- `docs/ANALISE-GESTAO-NELSON.md` — análise dos três ficheiros Excel, conflitos identificados e plano técnico.

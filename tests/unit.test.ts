@@ -102,14 +102,12 @@ ok("salões independentes (mesma data noutro salão)", S().requestReservation({ 
 as("manuel.muenho@residenciallaguna.ao");
 S().submitReservationPayment(r1.id, { reference: "", proof: { name: "c.pdf", type: "application/pdf", size: 10 } });
 ok("comprovativo da reserva → Em validação", S().reservations.find((r) => r.id === r1.id)!.status === "em_validacao");
-as("nelson.rodrigues@residenciallaguna.ao");
-throws("Gestor Operacional não valida pagamento de reserva", () => S().reviewReservationPayment(r1.id, "aprovado"));
 as("portaria@residenciallaguna.ao");
 throws("Portaria não valida reservas", () => S().reviewReservationPayment(r1.id, "aprovado"));
-as("saraiva@residenciallaguna.ao");
+as("nelson.rodrigues@residenciallaguna.ao");
 S().reviewReservationPayment(r1.id, "aprovado");
 const rc = S().reservations.find((r) => r.id === r1.id)!;
-ok("T13 pagamento da reserva registado e confirmado", rc.status === "confirmada" && rc.payment?.reviewedBy === "Saraiva" && !!rc.payment.receiptNumber);
+ok("T13 pagamento da reserva validado pelo Gestor Operacional (centro de gestão)", rc.status === "confirmada" && rc.payment?.reviewedBy === "Nelson Rodrigues" && !!rc.payment.receiptNumber, rc.payment?.reviewedBy);
 // expiração e lista de espera: expirar r2
 useDemoStore.setState({ reservations: S().reservations.map((r) => (r.id === r2.id ? { ...r, expiresAt: new Date(Date.now() - 1000).toISOString() } : r)) });
 ok("expiração liberta a data", S().expireReservations() >= 1 && S().reservations.find((r) => r.id === r2.id)!.status === "expirada");
@@ -162,22 +160,29 @@ throws("encargo sem fundamentação recusado", () => { as("nelson.rodrigues@resi
 
 console.log("22 Matriz de permissões");
 const M: [string, Role[]][] = [
-  ["executive.view", ["administrador"]],
-  ["finance.view", ["administrador", "financeiro"]],
+  ["executive.view", ["administrador", "gestor"]],
+  ["finance.view", ["administrador", "gestor", "financeiro"]],
   ["finance.limited", ["administrador", "gestor", "financeiro"]],
   ["operations.manage", ["gestor"]],
   ["elevators.view", ["administrador", "gestor", "morador"]],
   ["payments.review", ["administrador", "gestor", "financeiro"]],
   ["payments.submit", ["morador"]],
-  ["reservations.validate", ["financeiro"]],
+  ["reservations.validate", ["gestor", "financeiro"]],
   ["reservations.request", ["morador"]],
   ["reservations.events", ["administrador", "gestor", "porteiro"]],
-  ["moveout.financial", ["financeiro"]],
+  ["moveout.financial", ["gestor", "financeiro"]],
   ["moveout.operational", ["gestor"]],
   ["moveout.request", ["morador"]],
   ["moveout.authorized_view", ["porteiro"]],
-  ["reports.financial", ["administrador", "financeiro"]],
+  ["reports.financial", ["administrador", "gestor", "financeiro"]],
   ["reports.operational", ["administrador", "gestor"]],
+  ["holders.manage", ["administrador", "gestor"]],
+  ["declarations.request", ["morador"]],
+  ["declarations.sign", ["administrador", "gestor"]],
+  ["signature.manage", ["administrador", "gestor"]],
+  ["data.import", ["administrador", "gestor"]],
+  ["users.manage_privileged", ["administrador"]],
+  ["budget.manage", ["administrador", "gestor", "financeiro"]],
 ];
 const roles: Role[] = ["administrador", "gestor", "financeiro", "morador", "porteiro"];
 for (const [perm, allowed] of M) ok(`T22 ${perm}`, roles.every((r) => can(r, perm as never) === allowed.includes(r)));
@@ -207,7 +212,7 @@ console.log("Base de dados: mapeamento e projecção");
   const pf = projectFor(mk("financeiro"), d);
   ok("projecção Gestor Financeiro: sem visitas, com despesas", pf.visits.length === 0 && pf.expenses.length === d.expenses.length);
   const pg = projectFor(mk("gestor"), d);
-  ok("projecção Gestor Operacional: sem despesas detalhadas", pg.expenses.length === 0 && pg.payments.length === d.payments.length);
+  ok("projecção Gestor Operacional (centro de gestão): com despesas e pagamentos", pg.expenses.length === d.expenses.length && pg.payments.length === d.payments.length);
   ok("auditoria apenas para o Administrador", projectFor(mk("administrador"), { ...d, audit: [{ id: "a", at: "", by: "", role: "administrador", action: "x", entity: "y", entityId: "z" }] }).audit.length === 1 && pg.audit.length === 0);
 }
 
