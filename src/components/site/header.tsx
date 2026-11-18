@@ -37,7 +37,7 @@ export function Header() {
       <div className="container-site flex items-center justify-between gap-6">
         <Logo variant={transparent ? "white" : "color"} className="h-8 sm:h-9" />
 
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Navegação principal">
+        <nav className="hidden items-center gap-1 xl:flex" aria-label="Navegação principal">
           {publicNav.map((item) => (
             <Link
               key={item.href}
@@ -57,11 +57,11 @@ export function Header() {
         <div className="flex items-center gap-2">
           <Link href="/login" className={buttonClass(transparent ? "white" : "gold", "md", "hidden sm:inline-flex")}>
             <UserRound className="h-4 w-4" />
-            Área de Moradores
+            Área restrita de moradores
           </Link>
           <button
             onClick={() => setOpen((v) => !v)}
-            className={cn("rounded-xl p-2 lg:hidden", transparent ? "text-white hover:bg-white/10" : "text-navy-900 hover:bg-graphite-100")}
+            className={cn("rounded-xl p-2 xl:hidden", transparent ? "text-white hover:bg-white/10" : "text-navy-900 hover:bg-graphite-100")}
             aria-label={open ? "Fechar menu" : "Abrir menu"}
             aria-expanded={open}
           >
@@ -77,7 +77,7 @@ export function Header() {
             animate={{ opacity: 1, height: "calc(100dvh - 64px)" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden bg-white lg:hidden"
+            className="overflow-hidden bg-white xl:hidden"
           >
             <nav className="container-site flex h-full flex-col gap-1 py-6" aria-label="Navegação móvel">
               {publicNav.map((item, i) => (
@@ -92,7 +92,7 @@ export function Header() {
                 </motion.div>
               ))}
               <Link href="/login" onClick={() => setOpen(false)} className={buttonClass("primary", "lg", "mt-6 w-full")}>
-                <UserRound className="h-4 w-4" /> Área de Moradores
+                <UserRound className="h-4 w-4" /> Área restrita de moradores
               </Link>
             </nav>
           </motion.div>
